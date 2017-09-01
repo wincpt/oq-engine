@@ -117,8 +117,8 @@ def master(backend_url, func=None):
             print('Received stop command')
             pool.terminate()
             break
-        pool.apply_async(safely_call, (cmd, args), None,
-                         functools.partial(sendback, socket, ident))
+        pool.apply_async(safely_call, (cmd, args),
+                         callback=functools.partial(sendback, socket, ident))
 
 
 def sendback(socket, ident, res):
