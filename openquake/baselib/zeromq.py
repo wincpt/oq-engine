@@ -1,4 +1,3 @@
-from concurrent.futures import ProcessPoolExecutor
 import multiprocessing
 import functools
 import threading
@@ -116,15 +115,14 @@ def master(backend_url, func=None):
             cmd, args = func, pickle.loads(pik)
         if cmd == 'stop':
             print('Received stop command')
-            # TODO: kill all processes in the executor pool
-            executor.shutdown()
+            pool.terminate()
             break
-        fut = executor.submit(safely_call, cmd, args)
-        fut.add_done_callback(functools.partial(sendback, socket, ident))
+        pool.apply_async(safely_call, (cmd, args), None,
+                         functools.partial(sendback, socket, ident))
 
 
-def sendback(socket, ident, fut):
-    socket.send_multipart([ident, pickle.dumps(fut.result())])
+def sendback(socket, ident, res):
+    socket.send_multipart([ident, pickle.dumps(res)])
 
 
 def starmap(frontend_url, func, allargs):
@@ -149,5 +147,5 @@ if __name__ == '__main__':  # run workers
     except ValueError:
         url = sys.argv[1]
         ncores = multiprocessing.cpu_count()
-    with context, ProcessPoolExecutor(ncores) as executor:
+    with context, multiprocessing.Pool(ncores) as pool:
         master(url)
