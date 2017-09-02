@@ -213,7 +213,7 @@ def check_mem_usage(monitor=Monitor(),
                      used_mem_percent, hostname)
 
 
-def safely_call(func, args):
+def safely_call(func, args, resp=None):
     """
     Call the given function with the given arguments safely, i.e.
     by trapping the exceptions. Return a pair (result, exc_type)
@@ -223,6 +223,7 @@ def safely_call(func, args):
 
     :param func: the function to call
     :param args: the arguments
+    :param resp: a Responder object
     """
     with Monitor('total ' + func.__name__, measuremem=True) as child:
         pickle = args and hasattr(args[0], 'unpickle')
@@ -249,9 +250,10 @@ def safely_call(func, args):
                    etype, mon)
         finally:
             mon._flush = True
-
-    if pickle:  # it is impossible to measure the pickling time :-(
-        res = Pickled(res)
+    if resp:
+        with resp:
+            resp(res)
+        return
     return res
 
 

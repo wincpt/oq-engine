@@ -117,12 +117,28 @@ def master(backend_url, func=None):
             print('Received stop command')
             pool.terminate()
             break
-        pool.apply_async(safely_call, (cmd, args),
-                         callback=functools.partial(sendback, socket, ident))
+        # passing a responder to safely_call, since passing a callback to
+        # apply_async fails randomly with BrokenPipeErrors
+        resp = Responder(backend_url, DEALER, ident)
+        pool.apply_async(safely_call, (cmd, args, resp))
 
 
-def sendback(socket, ident, res):
-    socket.send_multipart([ident, pickle.dumps(res)])
+class Responder(object):
+    def __init__(self, backend_url, socket_type, ident):
+        self.backend_url = backend_url
+        self.socket_type = socket_type
+        self.ident = ident
+
+    def __enter__(self):
+        self.socket = context.connect(self.backend_url, self.socket_type)
+        return self
+
+    def __exit__(self, *args):
+        self.socket.close()
+        del self.socket
+
+    def __call__(self, res):
+        self.socket.send_multipart([self.ident, pickle.dumps(res)])
 
 
 def starmap(frontend_url, func, allargs):
@@ -147,5 +163,6 @@ if __name__ == '__main__':  # run workers
     except ValueError:
         url = sys.argv[1]
         ncores = multiprocessing.cpu_count()
-    with context, multiprocessing.Pool(ncores) as pool:
+    pool = multiprocessing.Pool(ncores)
+    with context:
         master(url)
