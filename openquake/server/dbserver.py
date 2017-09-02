@@ -16,9 +16,11 @@
 #  You should have received a copy of the GNU Affero General Public License
 #  along with OpenQuake.  If not, see <http://www.gnu.org/licenses/>.
 
+import os
 import sys
 import time
 import socket
+import signal
 import sqlite3
 import os.path
 import logging
@@ -75,7 +77,9 @@ class DbServer(object):
                 self.workers += 1
             logging.warn('starting zmq streamer on %s, %s',
                          self.frontend_url, backend_url)
-            z.Thread(z.streamer, self.frontend_url, backend_url).start()
+            code = ('from openquake.baselib.zeromq import streamer\n'
+                    'streamer("%s", "%s")' % (self.frontend_url, backend_url))
+            self.streamer = subprocess.Popen([sys.executable, '-c', code]).pid
         return self
 
     def __exit__(self, etype, exc, tb):
@@ -85,6 +89,7 @@ class DbServer(object):
                     logging.warning('stopping zmq worker %d', i)
                     s.send_pyobj(('stop', i))
                 time.sleep(1)  # wait a bit for the stop to be sent
+            os.kill(self.streamer, signal.SIGTERM)
 
     def loop(self):
         listener = Listener(self.address, backlog=5, authkey=self.authkey)
