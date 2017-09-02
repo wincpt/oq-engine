@@ -165,9 +165,10 @@ def get_host_cores():
 
 def zmq_urls():
     """
-    Returns a pair (start_point, end_point) of tcp:// addresses
+    Returns a pair (frontend, backend) of tcp:// addresses
     """
-    return 'tcp://%s:%s' % (host, port + 1),  'tcp://%s:%s' % (host, port + 2)
+    return 'tcp://%s:%s' % (host, port + 1),  'tcp://%s:%s-%s' % (
+        host, port + 2, port + 12)
 
 host = get('dbserver', 'host')
 if host == 'localhost':

@@ -53,10 +53,7 @@ class DbServer(object):
         self.address = address
         host, self.port = address
         self.authkey = authkey
-        if host == 'localhost':
-            host = '127.0.0.1'
-        self.frontend_url = 'tcp://%s:%s' % (host, self.port + 1)
-        self.backend_url = 'tcp://%s:%s' % (host, self.port + 2)
+        self.frontend_url, self.backend_url = config.zmq_urls()
 
     def __enter__(self):
         if zmq:
@@ -70,14 +67,11 @@ class DbServer(object):
                     args = []
                 else:
                     args = ['ssh', host, '-p', sshport]
-                args += [rpython, workerpath, self.backend_url, str(cores)]
+                args += [rpython, workerpath, self.frontend_url, str(cores)]
                 subprocess.Popen(args)
                 self.workers += 1
                 logging.warn('starting %d workers on %s listening on %s',
-                             cores, host, self.backend_url)
-            z.Thread(z.proxy, self.frontend_url, self.backend_url).start()
-            logging.warn('zmq proxy started on ports %d, %d',
-                         self.port + 1, self.port + 2)
+                             cores, host, self.frontend_url)
         return self
 
     def __exit__(self, etype, exc, tb):

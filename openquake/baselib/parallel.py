@@ -625,7 +625,8 @@ class Starmap(object):
         elif self.distribute == 'zmq':
             from openquake.baselib import zeromq as z
             allargs = self.add_task_no(self.task_args)
-            it = z.starmap(os.environ['OQ_FRONTEND'], self.task_func, allargs)
+            it = z.starmap(os.environ['OQ_FRONTEND'], os.environ['OQ_BACKEND'],
+                           self.task_func, allargs)
             ntasks = next(it)
             return IterResult(it, self.name, ntasks, self.progress, self.sent)
 

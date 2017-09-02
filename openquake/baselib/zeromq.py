@@ -1,6 +1,6 @@
 import multiprocessing
-import functools
 import threading
+import re
 import zmq
 from openquake.baselib.python3compat import pickle
 from openquake.baselib.parallel import safely_call
@@ -32,6 +32,15 @@ class _Context(zmq.Context):
             socket.close()
             raise exc.__class__('%s: %s' % (exc, end_point))
         return socket
+
+    def bind_to_random_port(self, end_point, socket_type):
+        # the end_point must end in :<min_port>-<max_port>
+        p1, p2 = re.search(r':(\d+)-(\d+)$', end_point).groups()
+        end_point = end_point.rsplit(':', 1)[0]  # strip port range
+        socket = self.socket(socket_type)
+        port = socket.bind_to_random_port(end_point, int(p1), int(p2))
+        backurl = '%s:%d' % (end_point, port)
+        return backurl, socket
 
     def connect(self, end_point, socket_type, **kw):
         identity = kw.pop('identity') if 'identity' in kw else None
@@ -98,36 +107,34 @@ def proxy(frontend_url, backend_url):
         zmq.proxy(frontend, backend)
 
 
-def master(backend_url, func=None):
+def master(frontend_url, func=None):
     """
     A worker reading tuples and returning results to the backend via a zmq
     socket.
 
-    :param backend_url: URL where to connect
+    :param frontend_url: URL where to connect
     :param func: if None, expects message to be pairs (cmd, args) else args
     """
-    socket = context.connect(backend_url, DEALER)
+    socket = context.bind(frontend_url, PULL)
     while True:
-        ident, pik = socket.recv_multipart()
         if func is None:  # retrieve the cmd from the message
-            cmd, args = pickle.loads(pik)
+            cmd, args = socket.recv_pyobj()
         else:  # use the provided func as cmd
-            cmd, args = func, pickle.loads(pik)
+            cmd, args = func, socket.recv_pyobj()
         if cmd == 'stop':
             print('Received stop command')
             pool.terminate()
             break
         # passing a responder to safely_call, since passing a callback to
         # apply_async fails randomly with BrokenPipeErrors
-        resp = Responder(backend_url, DEALER, ident)
+        resp = Responder(args[-1].backurl, PUSH)
         pool.apply_async(safely_call, (cmd, args, resp))
 
 
 class Responder(object):
-    def __init__(self, backend_url, socket_type, ident):
+    def __init__(self, backend_url, socket_type):
         self.backend_url = backend_url
         self.socket_type = socket_type
-        self.ident = ident
 
     def __enter__(self):
         self.socket = context.connect(self.backend_url, self.socket_type)
@@ -138,21 +145,28 @@ class Responder(object):
         del self.socket
 
     def __call__(self, res):
-        self.socket.send_multipart([self.ident, pickle.dumps(res)])
+        self.socket.send_pyobj(res)
+
+    def __repr__(self):
+        return '<%s %s>' % (self.__class__.__name__, self.backend_url)
 
 
-def starmap(frontend_url, func, allargs):
+def starmap(frontend_url, backend_url, func, allargs):
     """
     starmap a function over an iterator of arguments by using a zmq socket
     """
-    with context.connect(frontend_url, DEALER) as socket:
+    backurl, receiver = context.bind_to_random_port(backend_url, PULL)
+    sender = context.connect(frontend_url, PUSH)
+    with sender:
         n = 0
         for args in allargs:
-            socket.send_pyobj((func, args))
+            args[-1].backurl = backurl
+            sender.send_pyobj((func, args))
             n += 1
         yield n
+    with receiver:
         for _ in range(n):
-            yield socket.recv_pyobj()
+            yield receiver.recv_pyobj()
 
 
 if __name__ == '__main__':  # run workers
