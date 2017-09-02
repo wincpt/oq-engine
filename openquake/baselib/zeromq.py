@@ -163,7 +163,8 @@ def workerpool(url, func=None):
             pool.terminate()
             break
         # NB: the starmap attached .backurl to the monitor argument
-        if 0:
+        if 1:
+            # this approach has terrible slowdowns towards the calculation end
             resp = Responder(args[-1].backurl, PUSH)
             pool.apply_async(safely_call, (cmd, args, resp))
             # NB: passing a responder to safely_call, since passing a callback
