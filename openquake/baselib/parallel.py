@@ -251,8 +251,7 @@ def safely_call(func, args, resp=None):
         finally:
             mon._flush = True
     if resp:
-        with resp:
-            resp(res)
+        resp(res)
         return
     return res
 

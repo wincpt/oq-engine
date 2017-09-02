@@ -116,16 +116,9 @@ class Responder(object):
         self.backend_url = backend_url
         self.socket_type = socket_type
 
-    def __enter__(self):
-        self.socket = context.connect(self.backend_url, self.socket_type)
-        return self
-
-    def __exit__(self, *args):
-        self.socket.close()
-        del self.socket
-
     def __call__(self, res):
-        self.socket.send_pyobj(res)
+        with context.connect(self.backend_url, self.socket_type) as socket:
+            socket.send_pyobj(res)
 
     def __repr__(self):
         return '<%s %s>' % (self.__class__.__name__, self.backend_url)
@@ -170,11 +163,13 @@ def workerpool(url, func=None):
             pool.terminate()
             break
         # NB: the starmap attached .backurl to the monitor argument
-        resp = Responder(args[-1].backurl, PUSH)
-        pool.apply_async(safely_call, (cmd, args, resp))
-        # NB: passing a responder to safely_call, since passing a callback to
-        # apply_async fails randomly with BrokenPipeErrors
-
+        if 0:
+            resp = Responder(args[-1].backurl, PUSH)
+            pool.apply_async(safely_call, (cmd, args, resp))
+            # NB: passing a responder to safely_call, since passing a callback
+            # to apply_async fails randomly with BrokenPipeErrors
+        else:
+            pool.apply_async(safely_call, (cmd, args), callback=resp)
 
 if __name__ == '__main__':  # run workers
     import sys
