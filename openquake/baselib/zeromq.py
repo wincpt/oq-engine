@@ -25,11 +25,8 @@ class _Context(zmq.Context):
     """
     A zmq Context subclass with methods .bind and .connect
     """
-    def bind(self, end_point, socket_type, **kw):
-        identity = kw.pop('identity') if 'identity' in kw else None
-        socket = self.socket(socket_type, **kw)
-        if identity:
-            socket.identity = identity
+    def bind(self, end_point, socket_type):
+        socket = self.socket(socket_type)
         try:
             socket.bind(end_point)
         except Exception as exc:  # invalid end_point
@@ -46,11 +43,8 @@ class _Context(zmq.Context):
         backurl = '%s:%d' % (end_point, port)
         return backurl, socket
 
-    def connect(self, end_point, socket_type, **kw):
-        identity = kw.pop('identity') if 'identity' in kw else None
-        socket = self.socket(socket_type, **kw)
-        if identity:
-            socket.identity = identity
+    def connect(self, end_point, socket_type):
+        socket = self.socket(socket_type)
         try:
             socket.connect(end_point)
         except Exception as exc:  # invalid end_point
