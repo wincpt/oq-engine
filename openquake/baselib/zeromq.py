@@ -2,7 +2,11 @@ import multiprocessing
 import threading
 import re
 import zmq
-from openquake.baselib.python3compat import pickle
+try:
+    from setproctitle import setproctitle
+except ImportError:
+    def setproctitle(title):
+        "Do nothing"
 from openquake.baselib.parallel import safely_call
 
 REQ = zmq.REQ
@@ -98,37 +102,13 @@ class Thread(threading.Thread):
         self.join()
 
 
-def proxy(frontend_url, backend_url):
+def streamer(frontend_url, backend_url):
     """
-    A zmq proxy routing messages from the frontend to the backend and back
+    A streamer routing messages from the frontend to the backend
     """
     with context.bind(frontend_url, PULL) as frontend, \
             context.bind(backend_url, PUSH) as backend:
         zmq.proxy(frontend, backend)
-
-
-def master(backend_url, func=None):
-    """
-    A worker reading tuples and returning results to the backend via a zmq
-    socket.
-
-    :param backend_url: URL where to connect
-    :param func: if None, expects message to be pairs (cmd, args) else args
-    """
-    socket = context.connect(backend_url, PULL)
-    while True:
-        if func is None:  # retrieve the cmd from the message
-            cmd, args = socket.recv_pyobj()
-        else:  # use the provided func as cmd
-            cmd, args = func, socket.recv_pyobj()
-        if cmd == 'stop':
-            print('Received stop command')
-            pool.terminate()
-            break
-        # passing a responder to safely_call, since passing a callback to
-        # apply_async fails randomly with BrokenPipeErrors
-        resp = Responder(args[-1].backurl, PUSH)
-        pool.apply_async(safely_call, (cmd, args, resp))
 
 
 class Responder(object):
@@ -169,6 +149,33 @@ def starmap(frontend_url, backend_url, func, allargs):
             yield receiver.recv_pyobj()
 
 
+def workerpool(url, func=None):
+    """
+    A worker reading tuples and returning results to the backend via a zmq
+    socket.
+
+    :param url: URL where to connect
+    :param func: if None, expects message to be pairs (cmd, args) else args
+    """
+    title = 'oq-worker ' + url
+    pool = multiprocessing.Pool(ncores, setproctitle, (title,))
+    receiver = context.connect(url, PULL)
+    while True:
+        if func is None:  # retrieve the cmd from the message
+            cmd, args = receiver.recv_pyobj()
+        else:  # use the provided func as cmd
+            cmd, args = func, receiver.recv_pyobj()
+        if cmd == 'stop':
+            print('Received stop command')
+            pool.terminate()
+            break
+        # the starmap attached .backurl to the monitor argument
+        resp = Responder(args[-1].backurl, PUSH)
+        pool.apply_async(safely_call, (cmd, args, resp))
+        # NB: passing a responder to safely_call, since passing a callback to
+        # apply_async fails randomly with BrokenPipeErrors
+
+
 if __name__ == '__main__':  # run workers
     import sys
     try:
@@ -177,6 +184,5 @@ if __name__ == '__main__':  # run workers
     except ValueError:
         url = sys.argv[1]
         ncores = multiprocessing.cpu_count()
-    pool = multiprocessing.Pool(ncores)
     with context:
-        master(url)
+        workerpool(url)

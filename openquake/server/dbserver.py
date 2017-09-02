@@ -61,6 +61,7 @@ class DbServer(object):
             self.workers = 0
             rpython = (config.get('dbserver', 'remote_python') or
                        sys.executable)
+            # strip the max_port from backend_url, use the min_port
             backend_url = self.backend_url.rsplit('-')[0]
             for host, sshport, cores in config.get_host_cores():
                 if host == '127.0.0.1':  # localhost
@@ -69,12 +70,12 @@ class DbServer(object):
                     args = ['ssh', host, '-p', sshport]
                 args += [rpython, '-m', 'openquake.baselib.zeromq',
                          backend_url, str(cores)]
+                logging.warn('starting ' + ' '.join(args))
                 subprocess.Popen(args)
                 self.workers += 1
-                logging.warn('launching ' + ' '.join(args))
-            z.Thread(z.proxy, self.frontend_url, backend_url).start()
-            logging.warn('zmq proxy started on ports %d, %d',
-                         self.port + 1, self.port + 2)
+            logging.warn('starting zmq streamer on %s, %s',
+                         self.frontend_url, backend_url)
+            z.Thread(z.streamer, self.frontend_url, backend_url).start()
         return self
 
     def __exit__(self, etype, exc, tb):
