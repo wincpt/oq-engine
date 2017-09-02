@@ -169,7 +169,7 @@ def workerpool(url, func=None):
             print('Received stop command')
             pool.terminate()
             break
-        # the starmap attached .backurl to the monitor argument
+        # NB: the starmap attached .backurl to the monitor argument
         resp = Responder(args[-1].backurl, PUSH)
         pool.apply_async(safely_call, (cmd, args, resp))
         # NB: passing a responder to safely_call, since passing a callback to
