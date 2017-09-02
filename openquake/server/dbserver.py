@@ -57,7 +57,6 @@ class DbServer(object):
 
     def __enter__(self):
         if zmq:
-            workerpath = os.path.abspath(z.__file__)
             # create the workers
             self.workers = 0
             rpython = (config.get('dbserver', 'remote_python') or
@@ -67,11 +66,11 @@ class DbServer(object):
                     args = []
                 else:
                     args = ['ssh', host, '-p', sshport]
-                args += [rpython, workerpath, self.frontend_url, str(cores)]
+                args += [rpython, '-m', 'openquake.baselib.zeromq',
+                         self.frontend_url, str(cores)]
                 subprocess.Popen(args)
                 self.workers += 1
-                logging.warn('starting %d workers on %s listening on %s',
-                             cores, host, self.frontend_url)
+                logging.warn('launching ' + ' '.join(args))
         return self
 
     def __exit__(self, etype, exc, tb):
