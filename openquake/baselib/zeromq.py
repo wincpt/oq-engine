@@ -157,7 +157,7 @@ def workerpool(url, func=None):
     :param url: URL where to connect
     :param func: if None, expects message to be pairs (cmd, args) else args
     """
-    title = 'oq-worker ' + url
+    title = 'oq-worker'
     pool = multiprocessing.Pool(ncores, setproctitle, (title,))
     receiver = context.connect(url, PULL)
     while True:
