@@ -107,15 +107,15 @@ def proxy(frontend_url, backend_url):
         zmq.proxy(frontend, backend)
 
 
-def master(frontend_url, func=None):
+def master(backend_url, func=None):
     """
     A worker reading tuples and returning results to the backend via a zmq
     socket.
 
-    :param frontend_url: URL where to connect
+    :param backend_url: URL where to connect
     :param func: if None, expects message to be pairs (cmd, args) else args
     """
-    socket = context.connect(frontend_url, PULL)
+    socket = context.connect(backend_url, PULL)
     while True:
         if func is None:  # retrieve the cmd from the message
             cmd, args = socket.recv_pyobj()
