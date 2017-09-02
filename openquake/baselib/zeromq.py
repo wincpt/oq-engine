@@ -102,8 +102,8 @@ def proxy(frontend_url, backend_url):
     """
     A zmq proxy routing messages from the frontend to the backend and back
     """
-    with context.bind(frontend_url, ROUTER) as frontend, \
-            context.bind(backend_url, DEALER) as backend:
+    with context.bind(frontend_url, PULL) as frontend, \
+            context.bind(backend_url, PUSH) as backend:
         zmq.proxy(frontend, backend)
 
 
@@ -115,7 +115,7 @@ def master(frontend_url, func=None):
     :param frontend_url: URL where to connect
     :param func: if None, expects message to be pairs (cmd, args) else args
     """
-    socket = context.bind(frontend_url, PULL)
+    socket = context.connect(frontend_url, PULL)
     while True:
         if func is None:  # retrieve the cmd from the message
             cmd, args = socket.recv_pyobj()
