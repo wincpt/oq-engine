@@ -89,6 +89,7 @@ class DbServer(object):
                     logging.warning('stopping zmq worker %d', i)
                     s.send_pyobj(('stop', i))
                 time.sleep(1)  # wait a bit for the stop to be sent
+            logging.warning('stopping zmq streamer')
             os.kill(self.streamer, signal.SIGTERM)
 
     def loop(self):
