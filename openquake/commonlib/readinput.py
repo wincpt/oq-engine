@@ -33,7 +33,7 @@ from openquake.baselib.python3compat import configparser, decode
 from openquake.baselib.node import Node, context
 from openquake.baselib import hdf5
 from openquake.hazardlib import (
-    geo, site, imt, valid, sourceconverter, nrml, InvalidFile)
+    geo, site, gsim, imt, valid, sourceconverter, nrml, InvalidFile)
 from openquake.hazardlib.calc.hazard_curve import zero_curves
 from openquake.risklib import riskmodels, riskinput, read_nrml
 from openquake.commonlib import datastore
@@ -172,7 +172,8 @@ def get_oqparam(job_ini, pkg=None, calculators=None, hc_id=None):
         calculators or base.calculators)
 
     if not isinstance(job_ini, dict):
-        basedir = os.path.dirname(pkg.__file__) if pkg else ''
+        basedir = os.path.dirname(pkg.__file__) if pkg else '.'
+        valid.GSIM.update(gsim.get_available_gsims(basedir))
         job_ini = get_params([os.path.join(basedir, job_ini)])
 
     oqparam = OqParam(**job_ini)

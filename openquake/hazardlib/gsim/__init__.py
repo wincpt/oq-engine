@@ -29,10 +29,14 @@ from openquake.hazardlib.gsim.base import (
     GMPE, IPE, GroundShakingIntensityModel)
 
 
-def get_available_gsims():
+def get_available_gsims(gsim_dir=None):
     '''
-    Return an ordered dictionary with the available GSIM classes, keyed
-    by class name.
+    :param gsim_dir:
+        the directory where the GSIMs are defined; if missing, use the
+        directory where openquake.hazardlib.gsim is
+    :returns:
+        an ordered dictionary with the available GSIM classes, keyed
+        by class name.
     '''
     gsims = {}
     for fname in os.listdir(os.path.dirname(__file__)):
