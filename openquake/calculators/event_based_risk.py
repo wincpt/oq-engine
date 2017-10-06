@@ -21,6 +21,7 @@ import operator
 import itertools
 import collections
 import numpy
+import h5py
 
 from openquake.baselib.python3compat import zip, encode
 from openquake.baselib.general import (
@@ -215,6 +216,7 @@ class EbriskCalculator(base.RiskCalculator):
     """
     pre_calculator = 'event_based_rupture'
     is_stochastic = True
+    core_task = event_based_risk
 
     # TODO: if the number of source models is larger than concurrent_tasks
     # a different strategy should be used; the one used here is good when
@@ -240,6 +242,10 @@ class EbriskCalculator(base.RiskCalculator):
         rlzs_assoc = csm_info.get_rlzs_assoc()
         num_events = sum(ebr.multiplicity for grp in ruptures_by_grp
                          for ebr in ruptures_by_grp[grp])
+        self.eids = numpy.concatenate([ebr.events['eid']
+                                       for grp in sorted(ruptures_by_grp)
+                                       for ebr in ruptures_by_grp[grp]])
+        self.eidx = dict(zip(self.eids, range(len(self.eids))))
         seeds = self.oqparam.random_seed + numpy.arange(num_events)
 
         allargs = []
@@ -273,9 +279,9 @@ class EbriskCalculator(base.RiskCalculator):
                 allargs.append((ri, riskmodel, assetcol, monitor))
 
         self.vals = self.assetcol.values()
-        taskname = '%s#%d' % (event_based_risk.__name__, sm_id + 1)
+        taskname = '%s#%d' % (self.core_task.__name__, sm_id + 1)
         ires = parallel.Starmap(
-            event_based_risk, allargs, name=taskname).submit_all()
+            self.core_task.__func__, allargs, name=taskname).submit_all()
         ires.num_ruptures = {
             sg_id: len(rupts) for sg_id, rupts in ruptures_by_grp.items()}
         ires.num_events = num_events
@@ -375,10 +381,16 @@ class EbriskCalculator(base.RiskCalculator):
             self.alr_nbytes = 0
             self.indices = collections.defaultdict(list)  # sid -> pairs
 
+            self.alt_dt = numpy.dtype([('rlzi', U16),
+                                       ('loss', (F32, (self.L * self.I,)))])
+            self.datastore.create_dset(
+                'asset_loss_table', h5py.special_dtype(vlen=self.alt_dt),
+                (self.A, len(self.eids)), fillvalue=None)
+            self.datastore.set_attrs('asset_loss_table', eids=self.eids)
+
         if oq.avg_losses:
             self.dset = self.datastore.create_dset(
                 'avg_losses-rlzs', F32, (self.A, self.R, self.L * self.I))
-
         num_events = collections.Counter()
         self.gmdata = AccumDict(accum=numpy.zeros(len(oq.imtls) + 2, F32))
         self.taskno = 0
