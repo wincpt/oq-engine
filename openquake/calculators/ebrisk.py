@@ -73,16 +73,15 @@ class EbriskCalculator(ebr.EbriskCalculator):
     core_task = ebrisk
 
     def update(self, name, attr, value):
-        val = self.datastore.get_attr(name, attr, 0)
-        self.datastore.set_attrs(name, **{attr: val + value})
+        orig_value = self.datastore.get_attr(name, attr, 0)
+        self.datastore.set_attrs(name, **{attr: orig_value + value})
 
     def save_losses(self, dic, offset=0):
         """
         Save the event loss tables incrementally.
 
         :param dic:
-            dictionary with agglosses, assratios, losses_by_tag, avglosses,
-            lrs_idx
+            dictionary with losses, eids, aids
         :param offset:
             realization offset
         """
@@ -98,12 +97,20 @@ class EbriskCalculator(ebr.EbriskCalculator):
                     lst = [((r + offset, llosses))
                            for r, llosses in enumerate(elosses)
                            if llosses.sum()]
-                    nbytes += 8 + bytes_per_block * len(lst)
-                    data = numpy.array(lst, self.alt_dt)
-                    alt[aid, self.eidx[eid]] = data
+                    if lst:
+                        nbytes += 8 + bytes_per_block * len(lst)
+                        data = numpy.array(lst, self.alt_dt)
+                        alt[aid, self.eidx[eid]] = data
             self.update('asset_loss_table', 'nbytes', nbytes)
             self.taskno += 1
             self.start += losses.shape[2]  # num_rlzs
 
     def post_execute(self, num_events):
-        pass
+        shp = (self.A, self.R, self.L * self.I)
+        losses_by_asset = numpy.zeros(shp, ebr.F32)
+        alt = self.datastore['asset_loss_table']
+        for aid, all_rlz_losses in enumerate(alt):
+            for rlz_losses in all_rlz_losses:
+                for rlz, losses in rlz_losses:
+                    losses_by_asset[aid, rlz] += losses
+        self.datastore['losses_by_asset'] = losses_by_asset
