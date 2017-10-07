@@ -17,6 +17,8 @@
 # along with OpenQuake. If not, see <http://www.gnu.org/licenses/>.
 from __future__ import division
 import numpy
+import h5py
+from openquake.baselib.general import AccumDict
 from openquake.calculators import base, event_based_risk as ebr
 
 
@@ -31,18 +33,21 @@ def ebrisk(riskinput, riskmodel, param, monitor):
     :param monitor:
         :class:`openquake.baselib.performance.Monitor` instance
     :returns:
-        a dictionary with an array losses of shape (A, E, R, L * I)
+        a dictionary with an array of losses of shape (T, E, R, L * I)
     """
     riskinput.hazard_getter.init()
     assetcol = param['assetcol']
     all_eids = riskinput.hazard_getter.eids
-    A = len(assetcol)
+    aids_by_tag = assetcol.aids_by_tag
+    tags = assetcol.tags()
+    T = len(aids_by_tag)
     E = len(all_eids)
     I = param['insured_losses'] + 1
     L = len(riskmodel.lti)
     R = riskinput.hazard_getter.num_rlzs
     eidx = dict(zip(all_eids, range(E)))
-    result = dict(losses=numpy.zeros((A, E, R, L * I), ebr.F32),
+    losses = numpy.zeros((T, E, R, L * I), ebr.F32)
+    result = dict(losses=losses,
                   eids=all_eids, aids=getattr(riskinput, 'aids', None))
     for outs in riskmodel.gen_outputs(riskinput, monitor, assetcol):
         r = outs.r
@@ -54,10 +59,12 @@ def ebrisk(riskinput, riskmodel, param, monitor):
             loss_type = riskmodel.loss_types[l]
             for asset, ratios in zip(outs.assets, loss_ratios):
                 aid = asset.ordinal
-                losses = ratios * asset.value(loss_type)  # shape (E', I)
-                for i in range(I):
-                    li = l + L * i
-                    result['losses'][aid, indices, r, li] = losses[:, i]
+                avalues = ratios * asset.value(loss_type)  # shape (E', I)
+                for t, tag in enumerate(tags):
+                    if aid in aids_by_tag[tag]:
+                        for i in range(I):
+                            losses[t, indices, r, l + L * i] += avalues[:, i]
+
     # store info about the GMFs
     result['gmdata'] = riskinput.gmdata
     return result
@@ -86,31 +93,42 @@ class EbriskCalculator(ebr.EbriskCalculator):
             realization offset
         """
         bytes_per_block = 2 + self.L * self.I * 4
-        with self.monitor('saving asset_loss_table', autoflush=True):
-            aids = dic.pop('aids') or range(len(self.assetcol))
+        with self.monitor('saving tag_loss_table', autoflush=True):
             eids = dic.pop('eids')
-            losses = dic.pop('losses')  # shape (A, E, R, LI)
-            alt = self.datastore['asset_loss_table']
+            losses = dic.pop('losses')  # shape (T, E, R, LI)
+            tag_loss_table = self.datastore['tag_loss_table']
             nbytes = 0
-            for aid, alosses in zip(aids, losses):
-                for eid, elosses in zip(eids, alosses):
+            for t, tlosses in enumerate(losses):
+                for eid, elosses in zip(eids, tlosses):
                     lst = [((r + offset, llosses))
                            for r, llosses in enumerate(elosses)
                            if llosses.sum()]
                     if lst:
                         nbytes += 8 + bytes_per_block * len(lst)
                         data = numpy.array(lst, self.alt_dt)
-                        alt[aid, self.eidx[eid]] = data
-            self.update('asset_loss_table', 'nbytes', nbytes)
+                        tag_loss_table[t, self.eidx[eid]] = data
+            self.update('tag_loss_table', 'nbytes', nbytes)
             self.taskno += 1
             self.start += losses.shape[2]  # num_rlzs
 
     def post_execute(self, num_events):
-        shp = (self.A, self.R, self.L * self.I)
-        losses_by_asset = numpy.zeros(shp, ebr.F32)
-        alt = self.datastore['asset_loss_table']
-        for aid, all_rlz_losses in enumerate(alt):
+        shp = (self.T, self.R, self.L * self.I)
+        losses_by_tag = numpy.zeros(shp, ebr.F32)
+        tag_loss_table = self.datastore['tag_loss_table']
+        for t, all_rlz_losses in enumerate(tag_loss_table):
             for rlz_losses in all_rlz_losses:
                 for rlz, losses in rlz_losses:
-                    losses_by_asset[aid, rlz] += losses
-        self.datastore['losses_by_asset'] = losses_by_asset
+                    losses_by_tag[t, rlz] += losses
+        self.datastore['losses_by_tag'] = losses_by_tag
+        self.datastore['agg_losses-mean'] = (
+            losses_by_tag.sum(axis=0).mean(axis=0))
+
+        self.datastore.create_dset(
+            'losses_by_event', h5py.special_dtype(vlen=self.alt_dt),
+            (len(self.eids),), fillvalue=None)
+        for e in range(len(self.eids)):
+            acc = AccumDict(accum=numpy.zeros(self.L * self.I, ebr.F32))
+            for rlz_losses in self.datastore['tag_loss_table'][:, e]:
+                acc += dict(rlz_losses)  # array of R' items (rlz, losses)
+            self.datastore['losses_by_event'][e] = numpy.array(
+                sorted(acc.items()), self.alt_dt)

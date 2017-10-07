@@ -371,22 +371,21 @@ class EbriskCalculator(base.RiskCalculator):
         self.A = len(self.assetcol)
         self.tagmask = self.assetcol.tagmask()  # shape (A, T)
         tags = encode(self.assetcol.tags())
-        T = len(tags)
+        self.T = len(tags)
         self.datastore.create_dset('losses_by_tag-rlzs', F32,
-                                   (T, self.R, self.L * self.I))
+                                   (self.T, self.R, self.L * self.I))
         self.datastore.set_attrs('losses_by_tag-rlzs', tags=tags,
-                                 nbytes=4 * T * self.R * self.L * self.I)
-        if oq.asset_loss_table:
-            # save all_loss_ratios
-            self.alr_nbytes = 0
-            self.indices = collections.defaultdict(list)  # sid -> pairs
+                                 nbytes=4 * self.T * self.R * self.L * self.I)
 
-            self.alt_dt = numpy.dtype([('rlzi', U16),
-                                       ('loss', (F32, (self.L * self.I,)))])
-            self.datastore.create_dset(
-                'asset_loss_table', h5py.special_dtype(vlen=self.alt_dt),
-                (self.A, len(self.eids)), fillvalue=None)
-            self.datastore.set_attrs('asset_loss_table', eids=self.eids)
+        self.alr_nbytes = 0
+        self.indices = collections.defaultdict(list)  # sid -> pairs
+
+        self.alt_dt = numpy.dtype([('rlzi', U16),
+                                   ('loss', (F32, (self.L * self.I,)))])
+        self.datastore.create_dset(
+            'tag_loss_table', h5py.special_dtype(vlen=self.alt_dt),
+            (self.T, len(self.eids)), fillvalue=None)
+        self.datastore.set_attrs('tag_loss_table', eids=self.eids, tags=tags)
 
         if oq.avg_losses:
             self.dset = self.datastore.create_dset(
