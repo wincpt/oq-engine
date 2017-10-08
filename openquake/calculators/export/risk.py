@@ -214,6 +214,7 @@ def export_agg_losses_ebr(ekey, dstore):
     :param ekey: export key, i.e. a pair (datastore key, fmt)
     :param dstore: datastore object
     """
+    return []
     loss_types = dstore.get_attr('composite_risk_model', 'loss_types')
     L = len(loss_types)
     name, ext = export.keyfunc(ekey)
@@ -301,6 +302,7 @@ def export_loss_maps_csv(ekey, dstore):
     kind = ekey[0].split('-')[1]  # rlzs or stats
     assets = get_assets(dstore)
     value = get_loss_maps(dstore, kind)
+    assets = numpy.arange(len(value))
     if kind == 'rlzs':
         tags = dstore['csm_info'].get_rlzs_assoc().realizations
     else:

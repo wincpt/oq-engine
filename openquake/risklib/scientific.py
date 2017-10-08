@@ -1320,29 +1320,6 @@ class LossesByPeriodBuilder(object):
             array_stats = None
         return array, array_stats
 
-    # used in the EbrPostCalculator
-    def build_all(self, asset_values, loss_ratios, stats=()):
-        """
-        :param asset_values: a list of asset values
-        :param loss_ratios: an array of dtype lrs_dt
-        :param stats: list of pairs [(statname, statfunc), ...]
-        :returns: two composite arrays of shape (A, R, P) and (A, S, P)
-        """
-        # loss_ratios from lrgetter.get_all
-        A = len(asset_values)
-        R = len(self.weights)
-        P = len(self.return_periods)
-        array = numpy.zeros((A, R, P), self.loss_dt)
-        for a, asset_value in enumerate(asset_values):
-            r_recs = group_array(loss_ratios[a], 'rlzi').items()
-            for li, lt in enumerate(self.loss_dt.names):
-                aval = asset_value[lt.replace('_ins', '')]
-                for r, recs in r_recs:
-                    array[a, r][lt] = aval * losses_by_period(
-                        recs['ratios'][:, li], self.return_periods,
-                        self.num_events[r], self.eff_time)
-        return self.pair(array, stats)
-
     # used in the LossCurvesExporter
     def build_rlz(self, asset_values, loss_ratios, rlzi):
         """
@@ -1365,15 +1342,15 @@ class LossesByPeriodBuilder(object):
     def build(self, agg_loss_table, stats=()):
         """
         :param agg_loss_table:
-            the aggregate loss table
+            the aggregate loss table for a given tag
         :param stats:
-            list of pairs [(statname, statfunc), ...]
+            a list of pairs [(statname, statfunc), ...]
         :returns:
             two arrays of dtype loss_dt values with shape (P, R) and (P, S)
         """
         P, R = len(self.return_periods), len(self.weights)
         array = numpy.zeros((P, R), self.loss_dt)
-        dic = group_array(agg_loss_table, 'rlzi')
+        dic = group_array(numpy.concatenate(agg_loss_table), 'rlzi')
         for r in dic:
             num_events = self.num_events[r]
             losses = dic[r]['loss']
@@ -1386,17 +1363,16 @@ class LossesByPeriodBuilder(object):
 
     def build_maps(self, losses, clp, stats=()):
         """
-        :param losses: an array of shape (A, R, P)
+        :param losses: an array of shape (P, R)
         :param clp: a list of C conditional loss poes
         :param stats: list of pairs [(statname, statfunc), ...]
-        :returns: an array of loss_maps of shape (A, R, C, LI)
+        :returns: an array of loss_maps of shape (R, C, LI)
         """
-        shp = losses.shape[:2] + (len(clp), len(losses.dtype))  # (A, R, C, LI)
+        shp = (len(clp), losses.shape[1], len(losses.dtype))  # (C, R, LI)
         array = numpy.zeros(shp, F32)
         for lti, lt in enumerate(losses.dtype.names):
-            for a, losses_ in enumerate(losses[lt]):
-                for r, ls in enumerate(losses_):
-                    for c, poe in enumerate(clp):
-                        clratio = conditional_loss_ratio(ls, self.poes, poe)
-                        array[a, r, c, lti] = clratio
+            for r, losses_ in enumerate(losses[lt]):
+                for c, poe in enumerate(clp):
+                    clratio = conditional_loss_ratio(losses_, self.poes, poe)
+                    array[c, r, lti] = clratio
         return self.pair(array, stats)
