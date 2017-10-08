@@ -245,7 +245,7 @@ class EbriskCalculator(base.RiskCalculator):
         eids = numpy.concatenate([ebr.events['eid']
                                   for grp in sorted(ruptures_by_grp)
                                   for ebr in ruptures_by_grp[grp]])
-        self.eidx = dict(zip(self.eids, range(len(eids))))
+        self.eidx = dict(zip(eids, range(len(eids))))
         seeds = self.oqparam.random_seed + numpy.arange(num_events)
 
         allargs = []
