@@ -92,6 +92,7 @@ class EbriskCalculator(ebr.EbriskCalculator):
         :param offset:
             realization offset
         """
+        # 2 bytes per rlzi + 4 bytes per loss type
         bytes_per_block = 2 + self.L * self.I * 4
         with self.monitor('saving tag_loss_table', autoflush=True):
             eids = dic.pop('eids')
@@ -104,9 +105,10 @@ class EbriskCalculator(ebr.EbriskCalculator):
                            for r, llosses in enumerate(elosses)
                            if llosses.sum()]
                     if lst:
+                        # 8 bytes per vlen array + bytes per blocks
                         nbytes += 8 + bytes_per_block * len(lst)
                         data = numpy.array(lst, self.alt_dt)
-                        tag_loss_table[t, self.eidx[eid]] = data
+                        tag_loss_table[self.eidx[eid], t] = data
             self.update('tag_loss_table', 'nbytes', nbytes)
             self.taskno += 1
             self.start += losses.shape[2]  # num_rlzs
@@ -115,8 +117,8 @@ class EbriskCalculator(ebr.EbriskCalculator):
         shp = (self.T, self.R, self.L * self.I)
         losses_by_tag = numpy.zeros(shp, ebr.F32)
         tag_loss_table = self.datastore['tag_loss_table']
-        for t, all_rlz_losses in enumerate(tag_loss_table):
-            for rlz_losses in all_rlz_losses:
+        for t in range(self.T):
+            for rlz_losses in tag_loss_table[:, t]:
                 for rlz, losses in rlz_losses:
                     losses_by_tag[t, rlz] += losses
         self.datastore['losses_by_tag'] = losses_by_tag

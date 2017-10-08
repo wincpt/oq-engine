@@ -242,10 +242,10 @@ class EbriskCalculator(base.RiskCalculator):
         rlzs_assoc = csm_info.get_rlzs_assoc()
         num_events = sum(ebr.multiplicity for grp in ruptures_by_grp
                          for ebr in ruptures_by_grp[grp])
-        self.eids = numpy.concatenate([ebr.events['eid']
-                                       for grp in sorted(ruptures_by_grp)
-                                       for ebr in ruptures_by_grp[grp]])
-        self.eidx = dict(zip(self.eids, range(len(self.eids))))
+        eids = numpy.concatenate([ebr.events['eid']
+                                  for grp in sorted(ruptures_by_grp)
+                                  for ebr in ruptures_by_grp[grp]])
+        self.eidx = dict(zip(self.eids, range(len(eids))))
         seeds = self.oqparam.random_seed + numpy.arange(num_events)
 
         allargs = []
@@ -382,10 +382,15 @@ class EbriskCalculator(base.RiskCalculator):
 
         self.alt_dt = numpy.dtype([('rlzi', U16),
                                    ('loss', (F32, (self.L * self.I,)))])
+
+        try:
+            self.E = len(self.datastore['events'])
+        except KeyError:  # in the case of UCERF no events are stored yet
+            self.E = None
         self.datastore.create_dset(
             'tag_loss_table', h5py.special_dtype(vlen=self.alt_dt),
-            (self.T, len(self.eids)), fillvalue=None)
-        self.datastore.set_attrs('tag_loss_table', eids=self.eids, tags=tags)
+            (self.E, self.T), fillvalue=None)
+        self.datastore.set_attrs('tag_loss_table', tags=tags)
 
         if oq.avg_losses:
             self.dset = self.datastore.create_dset(
