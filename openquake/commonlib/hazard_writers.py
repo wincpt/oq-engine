@@ -539,12 +539,10 @@ class SESXMLWriter(object):
             root = et.Element('nrml')
             ses_container = et.SubElement(root, 'ruptureCollection')
             ses_container.set('investigationTime', str(investigation_time))
-            for grp_id in sorted(data):
-                attrs = dict(
-                    id=grp_id,
-                    tectonicRegion=data[grp_id][0].tectonic_region_type)
+            for trt in sorted(data):
+                attrs = dict(tectonicRegion=trt)
                 sg = et.SubElement(ses_container, 'ruptureGroup', attrs)
-                for rupture in data[grp_id]:
+                for rupture in data[trt]:
                     rupture_to_element(rupture, sg)
             nrml.write(list(root), fh)
 

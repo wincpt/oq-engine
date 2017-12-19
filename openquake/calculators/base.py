@@ -599,15 +599,15 @@ class HazardCalculator(BaseCalculator):
                         'Missing consequenceFunctions for %s' %
                         ' '.join(missing))
 
-    def count_eff_ruptures(self, result_dict, src_group_id):
+    def count_eff_ruptures(self, result_dict, trt):
         """
         Returns the number of ruptures in the src_group (after filtering)
         or 0 if the src_group has been filtered away.
 
         :param result_dict: a dictionary with keys (grp_id, gsim)
-        :param src_group_id: the source group ID
+        :param trt: tectonic region type
         """
-        return result_dict.eff_ruptures.get(src_group_id, 0)
+        return result_dict.eff_ruptures.get(trt, 0)
 
     def store_source_info(self, infos, acc):
         # save the calculation times per each source

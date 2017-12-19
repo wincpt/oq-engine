@@ -487,7 +487,7 @@ class CompositionInfo(object):
     def get_rlzs_assoc(self, count_ruptures=None,
                        sm_lt_path=None, trts=None):
         """
-        :param count_ruptures: function src_group_id -> num_ruptures
+        :param count_ruptures: function trt -> num_ruptures
         :param sm_lt_path: logic tree path tuple used to select a source model
         :param gsim_lt_path: gsim logic tree path tuple
         :param trts: tectonic region types to accept
@@ -504,7 +504,7 @@ class CompositionInfo(object):
             trts_ = set()
             for sg in smodel.src_groups:
                 if count_ruptures:
-                    sg.eff_ruptures = count_ruptures(sg.id)
+                    sg.eff_ruptures = count_ruptures(sg.trt)
                 if sg.eff_ruptures:
                     if (trts and sg.trt in trts) or not trts:
                         trts_.add(sg.trt)

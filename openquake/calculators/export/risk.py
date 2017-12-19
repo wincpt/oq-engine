@@ -227,12 +227,14 @@ def export_agg_losses_ebr(ekey, dstore):
     rup_data = {}
     event_by_eid = {}  # eid -> event
     # populate rup_data and event_by_eid
+    ruptures_by_trt = calc.get_ruptures_by_trt(dstore)
+    grp_trt = dstore['csm_info'].grp_trt()
     for grp_id, events in all_events.items():
         for event in events:
             event_by_eid[event['eid']] = event
         if has_rup_data:
-            ruptures = calc.get_ruptures(dstore, the_events, grp_id)
-            rup_data.update(get_rup_data(ruptures))
+            trt = grp_trt[grp_id]
+            rup_data.update(get_rup_data(ruptures_by_trt[trt]))
     for r, row in enumerate(agg_losses):
         rec = elt[r]
         event = event_by_eid[row['eid']]

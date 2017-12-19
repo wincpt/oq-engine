@@ -22,7 +22,6 @@ import operator
 import itertools
 import logging
 import collections
-import mock
 import numpy
 
 from openquake.baselib import hdf5
@@ -88,7 +87,7 @@ def compute_ruptures(sources, src_filter, gsims, param, monitor):
     """
     # NB: by construction each block is a non-empty list with
     # sources of the same src_group_id
-    grp_id = sources[0].src_group_id
+    trt = sources[0].tectonic_region_type
     eb_ruptures = []
     calc_times = []
     rup_mon = monitor('making contexts', measuremem=False)
@@ -111,10 +110,10 @@ def compute_ruptures(sources, src_filter, gsims, param, monitor):
             eb_ruptures.append(ebr)
         dt = time.time() - t0
         calc_times.append((src.id, dt))
-    res = AccumDict({grp_id: eb_ruptures})
+    res = AccumDict({trt: eb_ruptures})
     res.num_events = set_eids(eb_ruptures)
     res.calc_times = calc_times
-    res.eff_ruptures = {grp_id: num_ruptures}
+    res.eff_ruptures = {trt: num_ruptures}
     return res
 
 
@@ -169,11 +168,10 @@ def _build_eb_ruptures(
             for _ in range(num_occ):
                 # NB: the 0 below is a placeholder; the right eid will be
                 # set a bit later, in set_eids
-                events.append((0, ses_idx, sampleid))
+                events.append((0, src.src_group_id, ses_idx, sampleid))
         if events:
             yield calc.EBRupture(
-                rup, indices, numpy.array(events, calc.event_dt),
-                src.src_group_id, serial)
+                rup, indices, numpy.array(events, calc.event_dt), serial)
 
 
 def _count(ruptures):
@@ -221,31 +219,31 @@ class EventBasedRuptureCalculator(base.HazardCalculator):
         self.grp_trt = self.csm.info.grp_trt()
         return zd
 
-    def agg_dicts(self, acc, ruptures_by_grp_id):
+    def agg_dicts(self, acc, ruptures_by_trt):
         """
         Accumulate dictionaries of ruptures and populate the `events`
         dataset in the datastore.
 
         :param acc: accumulator dictionary
-        :param ruptures_by_grp_id: a nested dictionary grp_id -> ruptures
+        :param ruptures_by_trt: a nested dictionary grp_id -> ruptures
         """
-        if hasattr(ruptures_by_grp_id, 'calc_times'):
-            acc.calc_times.extend(ruptures_by_grp_id.calc_times)
-        if hasattr(ruptures_by_grp_id, 'eff_ruptures'):
-            acc.eff_ruptures += ruptures_by_grp_id.eff_ruptures
-        acc += ruptures_by_grp_id
-        self.save_ruptures(ruptures_by_grp_id)
+        if hasattr(ruptures_by_trt, 'calc_times'):
+            acc.calc_times.extend(ruptures_by_trt.calc_times)
+        if hasattr(ruptures_by_trt, 'eff_ruptures'):
+            acc.eff_ruptures += ruptures_by_trt.eff_ruptures
+        acc += ruptures_by_trt
+        self.save_ruptures(ruptures_by_trt)
         return acc
 
-    def save_ruptures(self, ruptures_by_grp_id):
+    def save_ruptures(self, ruptures_by_trt):
         """
         Extend the 'events' dataset with the events from the given ruptures;
         also, save the ruptures if the flag `save_ruptures` is on.
 
-        :param ruptures_by_grp_id: a dictionary grp_id -> list of EBRuptures
+        :param ruptures_by_trt: a dictionary grp_id -> list of EBRuptures
         """
         with self.monitor('saving ruptures', autoflush=True):
-            for grp_id, ebrs in ruptures_by_grp_id.items():
+            for trt, ebrs in ruptures_by_trt.items():
                 if len(ebrs):
                     events = get_events(ebrs)
                     dset = self.datastore.extend('events', events)
@@ -389,27 +387,6 @@ def compute_gmfs_and_curves(getter, oq, monitor):
                 taskno=monitor.task_no, indices=numpy.array(indices, (U32, 3)))
 
 
-def get_ruptures_by_grp(dstore):
-    """
-    Extracts the dictionary `ruptures_by_grp` from the given calculator
-    """
-    events = dstore['events']
-    n = 0
-    for grp in dstore['ruptures']:
-        n += len(dstore['ruptures/' + grp])
-    logging.info('Reading %d ruptures from the datastore', n)
-    # disable check on PlaceSurface to support UCERF ruptures
-    with mock.patch(
-            'openquake.hazardlib.geo.surface.PlanarSurface.'
-            'IMPERFECT_RECTANGLE_TOLERANCE', numpy.inf):
-        ruptures_by_grp = AccumDict(accum=[])
-        for grp in dstore['ruptures']:
-            grp_id = int(grp[4:])  # strip 'grp-'
-            ruptures = list(calc.get_ruptures(dstore, events, grp_id))
-            ruptures_by_grp[grp_id] = ruptures
-    return ruptures_by_grp
-
-
 def save_gmdata(calc, n_rlzs):
     """
     Save a composite array `gmdata` in the datastore.
@@ -485,9 +462,9 @@ class EventBasedCalculator(base.HazardCalculator):
                 self, res['ruptures'])
         return acc
 
-    def gen_args(self, ruptures_by_grp):
+    def gen_args(self, ruptures_by_trt):
         """
-        :param ruptures_by_grp: a dictionary of EBRupture objects
+        :param ruptures_by_trt: a dictionary of EBRupture objects
         :yields: the arguments for compute_gmfs_and_curves
         """
         oq = self.oqparam
@@ -500,8 +477,8 @@ class EventBasedCalculator(base.HazardCalculator):
         except AttributeError:  # no csm
             csm_info = self.datastore['csm_info']
         samples_by_grp = csm_info.get_samples_by_grp()
-        for grp_id in ruptures_by_grp:
-            ruptures = ruptures_by_grp[grp_id]
+        for grp_id, trt in csm_info.grp_trt().items():
+            ruptures = ruptures_by_trt.get(trt, [])
             if not ruptures:
                 continue
             rlzs_by_gsim = self.rlzs_assoc.get_rlzs_by_gsim(grp_id)
@@ -525,15 +502,16 @@ class EventBasedCalculator(base.HazardCalculator):
             calc.check_overflow(self)
 
         with self.monitor('reading ruptures', autoflush=True):
-            ruptures_by_grp = (self.precalc.result if self.precalc
-                               else get_ruptures_by_grp(self.datastore.parent))
+            ruptures_by_trt = (
+                self.precalc.result if self.precalc
+                else calc.get_ruptures_by_trt(self.datastore.parent))
 
         self.csm_info = self.datastore['csm_info']
         self.sm_id = {tuple(sm.path): sm.ordinal
                       for sm in self.csm_info.source_models}
         L = len(oq.imtls.array)
         R = len(self.datastore['realizations'])
-        allargs = list(self.gen_args(ruptures_by_grp))
+        allargs = list(self.gen_args(ruptures_by_trt))
         res = parallel.Starmap(self.core_task.__func__, allargs).submit_all()
         self.gmdata = {}
         self.offset = 0

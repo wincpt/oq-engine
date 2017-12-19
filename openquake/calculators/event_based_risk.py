@@ -25,11 +25,11 @@ import numpy
 from openquake.baselib.python3compat import zip, encode
 from openquake.baselib.general import (
     AccumDict, block_splitter, split_in_blocks)
-from openquake.baselib import config
-from openquake.calculators import base, event_based
-from openquake.calculators.export.loss_curves import get_loss_builder
 from openquake.baselib import parallel
 from openquake.risklib import riskinput
+from openquake.commonlib import calc
+from openquake.calculators import base, event_based
+from openquake.calculators.export.loss_curves import get_loss_builder
 
 U8 = numpy.uint8
 U16 = numpy.uint16
@@ -156,12 +156,12 @@ class EbriskCalculator(base.RiskCalculator):
     # TODO: if the number of source models is larger than concurrent_tasks
     # a different strategy should be used; the one used here is good when
     # there are few source models, so that we cannot parallelize on those
-    def start_tasks(self, sm_id, ruptures_by_grp, sitecol,
+    def start_tasks(self, sm_id, ruptures_by_trt, sitecol,
                     assetcol, riskmodel, imtls, trunc_level, correl_model,
                     min_iml, monitor):
         """
         :param sm_id: source model ordinal
-        :param ruptures_by_grp: dictionary of ruptures by src_group_id
+        :param ruptures_by_trt: dictionary of ruptures by TRT
         :param sitecol: a SiteCollection instance
         :param assetcol: an AssetCollection instance
         :param riskmodel: a RiskModel instance
@@ -173,8 +173,9 @@ class EbriskCalculator(base.RiskCalculator):
         :returns: an IterResult instance
         """
         csm_info = self.csm_info.get_info(sm_id)
-        grp_ids = sorted(csm_info.get_sm_by_grp())
         rlzs_assoc = csm_info.get_rlzs_assoc()
+        assert len(rlzs_assoc)
+
         # prepare the risk inputs
         allargs = []
         ruptures_per_block = self.oqparam.ruptures_per_block
@@ -184,11 +185,13 @@ class EbriskCalculator(base.RiskCalculator):
             csm_info = self.datastore['csm_info']
         samples_by_grp = csm_info.get_samples_by_grp()
         num_events = 0
-        for grp_id in grp_ids:
+        for grp_id, trt in csm_info.grp_trt().items():
+            ruptures = ruptures_by_trt.get(trt, [])
+            if not ruptures:
+                continue
             rlzs_by_gsim = rlzs_assoc.get_rlzs_by_gsim(grp_id)
             samples = samples_by_grp[grp_id]
-            for rupts in block_splitter(
-                    ruptures_by_grp.get(grp_id, []), ruptures_per_block):
+            for rupts in block_splitter(ruptures, ruptures_per_block):
                 n_events = sum(ebr.multiplicity for ebr in rupts)
                 eps = self.get_eps(self.start, self.start + n_events)
                 num_events += n_events
@@ -205,13 +208,13 @@ class EbriskCalculator(base.RiskCalculator):
         ires = parallel.Starmap(
             event_based_risk, allargs, name=taskname).submit_all()
         ires.num_ruptures = {
-            sg_id: len(rupts) for sg_id, rupts in ruptures_by_grp.items()}
+            sg_id: len(rupts) for sg_id, rupts in ruptures_by_trt.items()}
         ires.num_events = num_events
         ires.num_rlzs = len(rlzs_assoc.realizations)
         ires.sm_id = sm_id
         return ires
 
-    def gen_args(self, ruptures_by_grp):
+    def gen_args(self, ruptures_by_trt):
         """
         Yield the arguments required by build_ruptures, i.e. the
         source models, the asset collection, the riskmodel and others.
@@ -237,7 +240,7 @@ class EbriskCalculator(base.RiskCalculator):
                 maximum_distance=oq.maximum_distance,
                 samples=sm.samples,
                 seed=self.oqparam.random_seed)
-            yield (sm.ordinal, ruptures_by_grp, self.sitecol.complete,
+            yield (sm.ordinal, ruptures_by_trt, self.sitecol.complete,
                    param, self.riskmodel, imtls, oq.truncation_level,
                    correl_model, min_iml, mon)
 
@@ -261,18 +264,18 @@ class EbriskCalculator(base.RiskCalculator):
 
         self.csm_info = self.datastore['csm_info']
         with self.monitor('reading ruptures', autoflush=True):
-            ruptures_by_grp = (
+            ruptures_by_trt = (
                 self.precalc.result if self.precalc
-                else event_based.get_ruptures_by_grp(self.datastore.parent))
+                else calc.get_ruptures_by_trt(self.datastore.parent))
             # the ordering of the ruptures is essential for repeatibility
-            for grp in ruptures_by_grp:
-                ruptures_by_grp[grp].sort(key=operator.attrgetter('serial'))
+            for trt in ruptures_by_trt:
+                ruptures_by_trt[trt].sort(key=operator.attrgetter('serial'))
         num_rlzs = 0
         allres = []
         source_models = self.csm_info.source_models
         self.sm_by_grp = self.csm_info.get_sm_by_grp()
-        num_events = sum(ebr.multiplicity for grp in ruptures_by_grp
-                         for ebr in ruptures_by_grp[grp])
+        num_events = sum(ebr.multiplicity for trt in ruptures_by_trt
+                         for ebr in ruptures_by_trt[trt])
         self.get_eps = riskinput.make_epsilon_getter(
             len(self.assetcol), num_events,
             self.oqparam.asset_correlation,
@@ -280,7 +283,7 @@ class EbriskCalculator(base.RiskCalculator):
             self.oqparam.ignore_covs or not self.riskmodel.covs)
         self.assets_by_site = self.assetcol.assets_by_site()
         self.start = 0
-        for i, args in enumerate(self.gen_args(ruptures_by_grp)):
+        for i, args in enumerate(self.gen_args(ruptures_by_trt)):
             ires = self.start_tasks(*args)
             allres.append(ires)
             ires.rlz_slice = slice(num_rlzs, num_rlzs + ires.num_rlzs)
@@ -394,7 +397,6 @@ class EbriskCalculator(base.RiskCalculator):
         if not gmv:
             raise RuntimeError('No GMFs were generated, perhaps they were '
                                'all below the minimum_intensity threshold')
-
         if 'agg_loss_table' not in self.datastore:
             logging.warning(
                 'No losses were generated: most likely there is an error in y'
