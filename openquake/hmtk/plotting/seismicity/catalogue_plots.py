@@ -32,6 +32,7 @@ def build_filename(filename, filetype='png', resolution=300):
         filetype = filevals[1][1:]
     if not filetype:
         filetype = 'png'
+    print('-----', filename, filevals[0], filetype)
     filename = filevals[0] + '.' + filetype
 
     if not resolution:
@@ -75,7 +76,8 @@ def _get_catalogue_bin_limits(catalogue, dmag):
 
 def plot_depth_histogram(
         catalogue, bin_width, normalisation=False,
-        bootstrap=None, filename=None, filetype='png', dpi=300, ax=None):
+        bootstrap=None, filename=None, filetype='png', dpi=300, ax=None,
+        save=True):
     """
     Creates a histogram of the depths in the catalogue
 
@@ -113,7 +115,8 @@ def plot_depth_histogram(
         ax.set_ylabel('Count')
     ax.set_title('Depth Histogram', fontsize='large')
 
-    _save_image(fig, filename, filetype, dpi)
+    if save:
+        _save_image(fig, filename, filetype, dpi)
 
     return
 
@@ -121,7 +124,7 @@ def plot_depth_histogram(
 def plot_magnitude_depth_density(
         catalogue, mag_int, depth_int, logscale=False,
         normalisation=False, bootstrap=None, filename=None, filetype='png',
-        dpi=300, ax=None):
+        dpi=300, ax=None, save=True):
     """
     Creates a density plot of the magnitude and depth distribution
 
@@ -174,14 +177,15 @@ def plot_magnitude_depth_density(
     else:
         ax.set_title('Magnitude-Depth Count', fontsize='large')
 
-    _save_image(fig, filename, filetype, dpi)
+    if save:
+        _save_image(fig, filename, filetype, dpi)
 
     return
 
 
 def plot_magnitude_time_scatter(
         catalogue, plot_error=False, filename=None,
-        filetype='png', dpi=300, fmt_string='o', ax=None):
+        filetype='png', dpi=300, fmt_string='o', ax=None, save=True):
     """
     Creates a simple scatter plot of magnitude with time
 
@@ -215,7 +219,8 @@ def plot_magnitude_time_scatter(
     ax.set_ylabel('Magnitude', fontsize='large')
     ax.set_title('Magnitude-Time Plot', fontsize='large')
 
-    _save_image(fig, filename, filetype, dpi)
+    if save:
+        _save_image(fig, filename, filetype, dpi)
 
     return
 
@@ -223,7 +228,7 @@ def plot_magnitude_time_scatter(
 def plot_magnitude_time_density(
         catalogue, mag_int, time_int,
         normalisation=False, logscale=True, bootstrap=None, filename=None,
-        filetype='png', dpi=300, completeness=None, ax=None):
+        filetype='png', dpi=300, completeness=None, ax=None, save=True):
     """
     Creates a plot of magnitude-time density
 
@@ -294,7 +299,8 @@ def plot_magnitude_time_density(
     if completeness is not None:
         _plot_completeness(ax, completeness, time_bins[0], time_bins[-1])
 
-    _save_image(fig, filename, filetype, dpi)
+    if save:
+        _save_image(fig, filename, filetype, dpi)
 
     return
 
@@ -360,7 +366,7 @@ def get_completeness_adjusted_table(catalogue, completeness, dmag, end_year):
 
 def plot_observed_recurrence(
         catalogue, completeness, dmag, end_year=None, figure_size=DEFAULT_SIZE,
-        filename=None, filetype='png', dpi=300, ax=None):
+        filename=None, filetype='png', dpi=300, ax=None, save=True):
     """
     Plots the observed recurrence taking into account the completeness
     """
@@ -391,4 +397,5 @@ def plot_observed_recurrence(
     ax.set_ylabel('Annual Rate', fontsize=16)
     ax.legend(fontsize=14)
     ax.tick_params(labelsize=12)
-    _save_image(fig, filename, filetype, dpi)
+    if save:
+        _save_image(fig, filename, filetype, dpi)
