@@ -18,12 +18,13 @@
 import getpass
 from openquake.baselib import sap
 from openquake.commonlib import logs
-from openquake.server import views
+from openquake.server import views, dbserver
 from openquake.commands import abort
 
 
 def run(job_ini, prev_id=None):
     """Submit an OpenQuake job and return its ID"""
+    dbserver.ensure_on()
     job_id, _pid = views.submit_job(job_ini, getpass.getuser(), prev_id)
     return job_id
 
