@@ -24,7 +24,6 @@ import sys
 import inspect
 import tempfile
 import subprocess
-import threading
 import signal
 import zlib
 try:
@@ -493,9 +492,11 @@ def run_calc(request):
 
 RUNCALC = '''\
 import os, sys
+from openquake.baselib.general import detach_process
 from openquake.baselib.python3compat import pickle
 from openquake.engine import engine
 if __name__ == '__main__':
+    detach_process()
     oqparam = pickle.loads(%(pik)r)
     engine.run_calc(
         %(job_id)s, oqparam, 'info', os.devnull, '', %(hazard_job_id)s)
@@ -516,7 +517,6 @@ def submit_job(job_ini, user_name, hazard_job_id=None):
     devnull = getattr(subprocess, 'DEVNULL', None)  # defined in Python 3
     popen = subprocess.Popen([sys.executable, tmp_py],
                              stdin=devnull, stdout=devnull, stderr=devnull)
-    threading.Thread(target=popen.wait).start()
     logs.dbcmd('update_job', job_id, {'pid': popen.pid})
     return job_id, popen.pid
 

@@ -159,10 +159,8 @@ def ensure_on():
         if config.dbserver.multi_user:
             sys.exit('Please start the DbServer: '
                      'see the documentation for details')
-        # otherwise start the DbServer automatically; NB: I tried to use
-        # multiprocessing.Process(target=run_server).start() and apparently
-        # it works, but then run-demos.sh hangs after the end of the first
-        # calculation, but only if the DbServer is started by oq engine (!?)
+        # otherwise start the DbServer automatically; this works because
+        # the DbServer detaches itself from the controlling terminal
         subprocess.Popen([sys.executable, '-m', 'openquake.server.dbserver',
                           '-l', 'INFO'])
 
@@ -213,7 +211,7 @@ run_server.arg('logfile', 'log file')
 run_server.opt('loglevel', 'WARN or INFO')
 
 if __name__ == '__main__':
-    if hasattr(os, 'fork') and not config.dbserver.multi_user:
+    if not config.dbserver.multi_user:
         # needed for https://github.com/gem/oq-engine/issues/3211
         # but only if multi_user = False, otherwise init/supervisor
         # will loose control of the process

@@ -24,7 +24,8 @@ from openquake.commands import abort
 
 def run(job_ini, prev_id=None):
     """Submit an OpenQuake job and return its ID"""
-    dbserver.ensure_on()
+    if dbserver.get_status() != 'running':
+        return 'You must start the DbServer to run calculations'
     job_id, _pid = views.submit_job(job_ini, getpass.getuser(), prev_id)
     return job_id
 
