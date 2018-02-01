@@ -21,6 +21,7 @@ import json
 import logging
 import os
 import sys
+import getpass
 import inspect
 import tempfile
 import subprocess
@@ -477,7 +478,7 @@ def run_calc(request):
 
     user = utils.get_user_data(request)
     try:
-        job_id, pid = submit_job(einfo[0], user['name'], hazard_job_id)
+        dic = submit_job(einfo[0], user['name'], hazard_job_id)
     except Exception as exc:  # no job created, for instance missing .xml file
         # get the exception message
         exc_msg = str(exc)
@@ -485,7 +486,8 @@ def run_calc(request):
         response_data = exc_msg.splitlines()
         status = 500
     else:
-        response_data = dict(job_id=job_id, status='created', pid=pid)
+        response_data = dict(job_id=dic['job_id'], status='created',
+                             pid=dic['pid'])
         status = 200
     return HttpResponse(content=json.dumps(response_data), content_type=JSON,
                         status=status)
@@ -503,12 +505,13 @@ if __name__ == '__main__':
 '''
 
 
-def submit_job(job_ini, user_name, hazard_job_id=None):
+def submit_job(job_ini, user_name=None, hazard_job_id=None):
     """
     Create a job object from the given job.ini file in the job directory
     and run it in a new process. Returns the job ID and PID.
     """
-    job_id, oq = engine.job_from_file(job_ini, user_name, hazard_job_id)
+    job_id, oq = engine.job_from_file(
+        job_ini, user_name or getpass.getuser(), hazard_job_id)
     pik = pickle.dumps(oq, protocol=0)  # human readable protocol
     code = RUNCALC % dict(job_id=job_id, hazard_job_id=hazard_job_id, pik=pik)
     tmp_py = writetmp(code, suffix='.py')
@@ -518,7 +521,7 @@ def submit_job(job_ini, user_name, hazard_job_id=None):
                              stdin=devnull, stdout=devnull, stderr=devnull)
     threading.Thread(target=popen.wait).start()
     logs.dbcmd('update_job', job_id, {'pid': popen.pid})
-    return job_id, popen.pid
+    return dict(job_id=job_id, pid=popen.pid)
 
 
 @require_http_methods(['GET'])

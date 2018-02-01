@@ -16,6 +16,8 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with OpenQuake. If not, see <http://www.gnu.org/licenses/>.
 from openquake.baselib import sap
+from openquake.server import views
+from openquake.commands import abort
 
 
 class OQ(object):
@@ -34,6 +36,8 @@ class OQ(object):
         self.get_site_collection = readinput.get_site_collection
         self.get_exposure = readinput.get_exposure
         self.make_hmap = calc.make_hmap
+        self.run = views.submit_job
+        self.abort = abort.abort
         # TODO: more utilities when be added when deemed useful
 
 

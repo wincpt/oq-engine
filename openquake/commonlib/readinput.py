@@ -899,8 +899,6 @@ class Exposure(object):
         ass = asset.Asset(idx, idxs, number, location, values, area,
                           deductibles, insurance_limits, retrofitteds,
                           self.cost_calculator)
-        if not idxs:
-            import pdb; pdb.set_trace()
         self.assets.append(ass)
 
 
