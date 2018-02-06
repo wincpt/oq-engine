@@ -16,6 +16,7 @@
 #  You should have received a copy of the GNU Affero General Public License
 #  along with OpenQuake.  If not, see <http://www.gnu.org/licenses/>.
 from openquake.baselib.python3compat import zip
+from openquake.baselib.general import AccumDict
 import numpy
 
 F32 = numpy.float32
@@ -366,3 +367,31 @@ def combine(pmaps):
     for pmap in pmaps:
         res |= pmap
     return res
+
+
+def compress(dic):
+    """
+    Compress a dictionary of ProbabilityMaps
+    """
+    newdic = AccumDict()
+    vars(newdic).update(vars(dic))
+    for k in dic:
+        sids = list(dic[k])
+        array = dic[k].array
+        idx = array.nonzero()
+        newdic[k] = (idx, array[idx], array.shape, sids)
+    return newdic
+
+
+def decompress(dic):
+    """
+    Decompress a dictionary of ProbabilityMaps
+    """
+    newdic = AccumDict()
+    vars(newdic).update(vars(dic))
+    for k in dic:
+        idx, value, shape, sids = dic[k]
+        array = numpy.zeros(shape)
+        array[idx] = value
+        newdic[k] = ProbabilityMap.from_array(array, sids)
+    return newdic
