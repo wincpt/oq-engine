@@ -129,14 +129,6 @@ class BaseCalculator(with_metaclass(abc.ABCMeta)):
     pre_calculator = None  # to be overridden
     is_stochastic = False  # True for scenario and event based calculators
 
-    @property
-    def taxonomies(self):
-        """
-        :returns: the set of available taxonomies
-        """
-        return set(taxo for taxo in self.assetcol.tagcol.taxonomies()
-                   if taxo != '?')
-
     def __init__(self, oqparam, monitor=Monitor(), calc_id=None):
         self._monitor = monitor
         self.datastore = datastore.DataStore(calc_id)
@@ -193,7 +185,6 @@ class BaseCalculator(with_metaclass(abc.ABCMeta)):
             # save the used concurrent_tasks
             self.oqparam.concurrent_tasks = ct
         self.save_params(**kw)
-        exported = {}
         try:
             if pre_execute:
                 self.pre_execute()
@@ -201,7 +192,7 @@ class BaseCalculator(with_metaclass(abc.ABCMeta)):
             if self.result is not None:
                 self.post_execute(self.result)
             self.before_export()
-            exported = self.export(kw.get('exports', ''))
+            self.export(kw.get('exports', ''))
         except:
             if kw.get('pdb'):  # post-mortem debug
                 tb = sys.exc_info()[2]
@@ -216,7 +207,7 @@ class BaseCalculator(with_metaclass(abc.ABCMeta)):
                     del os.environ['OQ_DISTRIBUTE']
                 else:
                     os.environ['OQ_DISTRIBUTE'] = oq_distribute
-        return exported
+        return getattr(self, 'exported', {})
 
     def core_task(*args):
         """
@@ -249,10 +240,8 @@ class BaseCalculator(with_metaclass(abc.ABCMeta)):
         """
         Export all the outputs in the datastore in the given export formats.
         Individual outputs are not exported if there are multiple realizations.
-
-        :returns: dictionary output_key -> sorted list of exported paths
         """
-        exported = {}
+        self.exported = getattr(self.precalc, 'exported', {})
         if isinstance(exports, tuple):
             fmts = exports
         elif exports:  # is a string
@@ -271,11 +260,11 @@ class BaseCalculator(with_metaclass(abc.ABCMeta)):
             for key in sorted(keys):  # top level keys
                 if 'rlzs' in key and self.R > 1:
                     continue  # skip individual curves
-                self._export((key, fmt), exported)
+                self._export((key, fmt))
             if has_hcurves and self.oqparam.hazard_maps:
-                self._export(('hmaps', fmt), exported)
+                self._export(('hmaps', fmt))
             if has_hcurves and self.oqparam.uniform_hazard_spectra:
-                self._export(('uhs', fmt), exported)
+                self._export(('uhs', fmt))
 
         if self.close:  # in the engine we close later
             self.result = None
@@ -285,13 +274,14 @@ class BaseCalculator(with_metaclass(abc.ABCMeta)):
                 # sometimes produces errors but they are difficult to
                 # reproduce
                 logging.warn('', exc_info=True)
-        return exported
 
-    def _export(self, ekey, exported):
-        if ekey in exp:
-            with self.monitor('export'):
-                exported[ekey] = exp(ekey, self.datastore)
-                logging.info('exported %s: %s', ekey[0], exported[ekey])
+    def _export(self, ekey):
+        if ekey not in exp or self.exported.get(ekey):  # already exported
+            return
+        with self.monitor('export'):
+            self.exported[ekey] = fnames = exp(ekey, self.datastore)
+            if fnames:
+                logging.info('exported %s: %s', ekey[0], fnames)
 
     def before_export(self):
         """
@@ -326,6 +316,7 @@ class HazardCalculator(BaseCalculator):
     Base class for hazard calculators based on source models
     """
     grp_by_src = False  # set True in disaggregation
+    precalc = None
 
     def can_read_parent(self):
         """
@@ -445,12 +436,10 @@ class HazardCalculator(BaseCalculator):
             if precalc_id is None:
                 self.precalc = self.compute_previous()
             else:
-                self.precalc = None
                 self.read_previous(precalc_id)
                 self.read_risk_data()
             self.init()
         else:  # we are in a basic calculator
-            self.precalc = None
             self.read_inputs()
             if 'source' in self.oqparam.inputs and precalc_id is None:
                 job_info.update(readinput.get_job_info(
@@ -480,7 +469,7 @@ class HazardCalculator(BaseCalculator):
     def read_exposure(self):
         """
         Read the exposure, the riskmodel and update the attributes .exposure,
-        .sitecol, .assets_by_site, .taxonomies.
+        .sitecol, .assets_by_site
         """
         logging.info('Reading the exposure')
         with self.monitor('reading exposure', autoflush=True):
@@ -516,7 +505,7 @@ class HazardCalculator(BaseCalculator):
         The riskmodel can be empty for hazard calculations.
         Save the loss ratios (if any) in the datastore.
         """
-        logging.info('Reading the risk model')
+        logging.info('Reading the risk model if present')
         self.riskmodel = rm = readinput.get_risk_model(self.oqparam)
         if not self.riskmodel:  # can happen only in a hazard calculation
             return
@@ -583,7 +572,8 @@ class HazardCalculator(BaseCalculator):
                         oq.time_event, oq_hazard.time_event))
 
         if self.oqparam.job_type == 'risk':
-            taxonomies = set(self.taxonomies)
+            taxonomies = set(taxo for taxo in self.assetcol.tagcol.taxonomy
+                             if taxo != '?')
 
             # check that we are covering all the taxonomies in the exposure
             missing = taxonomies - set(self.riskmodel.taxonomies)
@@ -631,6 +621,8 @@ class HazardCalculator(BaseCalculator):
         self.csm.info.update_eff_ruptures(
             partial(self.count_eff_ruptures, acc))
         self.rlzs_assoc = self.csm.info.get_rlzs_assoc(self.oqparam.sm_lt_path)
+        if not self.rlzs_assoc:
+            raise RuntimeError('Empty logic tree: too much filtering?')
         self.datastore['csm_info'] = self.csm.info
         if 'source_info' in self.datastore:
             # the table is missing for UCERF, we should fix that
@@ -670,6 +662,7 @@ class RiskCalculator(HazardCalculator):
         :returns:
             a list of RiskInputs objects, sorted by IMT.
         """
+        logging.info('There are %d realizations', self.R)
         imtls = self.oqparam.imtls
         if not set(self.oqparam.risk_imtls) & set(imtls):
             rsk = ', '.join(self.oqparam.risk_imtls)
@@ -679,7 +672,7 @@ class RiskCalculator(HazardCalculator):
         num_tasks = self.oqparam.concurrent_tasks or 1
         if not hasattr(self, 'assetcol'):
             self.assetcol = self.datastore['assetcol']
-        self.riskmodel.taxonomy = self.assetcol.tagcol.taxonomies()
+        self.riskmodel.taxonomy = self.assetcol.tagcol.taxonomy
         assets_by_site = self.assetcol.assets_by_site()
         with self.monitor('building riskinputs', autoflush=True):
             riskinputs = []
@@ -700,7 +693,7 @@ class RiskCalculator(HazardCalculator):
                             reduced_eps[ass.ordinal] = eps[ass.ordinal]
                 # build the riskinputs
                 if kind == 'poe':  # hcurves, shape (R, N)
-                    getter = PmapGetter(dstore, sids)
+                    getter = PmapGetter(dstore, sids, self.rlzs_assoc)
                     getter.num_rlzs = self.R
                 else:  # gmf
                     getter = GmfDataGetter(dstore, sids, self.R, eids)
@@ -708,6 +701,9 @@ class RiskCalculator(HazardCalculator):
                     # read the hazard data in the controller node
                     logging.info('Reading hazard')
                     getter.init()
+                else:
+                    # the datastore must be closed to avoid the HDF5 fork bug
+                    assert dstore.hdf5 == (), '%s is not closed!' % dstore
                 ri = riskinput.RiskInput(getter, reduced_assets, reduced_eps)
                 if ri.weight > 0:
                     riskinputs.append(ri)

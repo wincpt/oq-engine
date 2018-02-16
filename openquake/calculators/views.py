@@ -255,7 +255,7 @@ def view_ruptures_per_trt(token, dstore):
                 num_trts += 1
                 eff_ruptures += er
                 tbl.append(
-                    (sm.name, src_group.id, trt, er, src_group.tot_ruptures))
+                    (sm.names, src_group.id, trt, er, src_group.tot_ruptures))
             tot_ruptures += src_group.tot_ruptures
     rows = [('#TRT models', num_trts),
             ('#eff_ruptures', eff_ruptures),
@@ -635,8 +635,7 @@ def view_task(token, dstore):
     i = int(token.split(':')[1])
     taskno, weight, duration = data[i]
     arr = get_array(dstore['task_info/source_data'].value, taskno=taskno)
-    st = [stats('nsites', arr['nsites']),
-          stats('weight', arr['weight'])]
+    st = [stats('nsites', arr['nsites']), stats('weight', arr['weight'])]
     sources = dstore['task_info/task_sources'][taskno - 1].split()
     srcs = set(decode(s).split(':', 1)[0] for s in sources)
     res = 'taskno=%d, weight=%d, duration=%d s, sources="%s"\n\n' % (
@@ -789,7 +788,6 @@ def view_pmap(token, dstore):
     name = token.split(':')[1]  # called as pmap:name
     pmap = {}
     pgetter = getters.PmapGetter(dstore)
-    pgetter.init()
     for grp, dset in dstore['poes'].items():
         if dset.attrs['name'] == name:
             pmap = pgetter.get_mean(grp)
