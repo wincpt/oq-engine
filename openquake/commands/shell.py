@@ -35,7 +35,7 @@ def status(job_id):
     return logs.dbcmd('calc_info', job_id)
 
 
-class OQ(object):
+class OpenQuake(object):
     """
     Singleton object with convenience functions which are aliases over
     engine utilities for work in the interactive interpreter.
@@ -61,13 +61,13 @@ class OQ(object):
 @sap.Script
 def shell():
     """
-    Start an embedded (i)python instance with a global oq object
+    Start an embedded (i)python instance with a global object "o"
     """
-    oq = OQ()  # noqa
+    o = OpenQuake()  # noqa
     try:
         import IPython
-        IPython.embed(banner1='IPython shell with a global oq object')
+        IPython.embed(banner1='IPython shell with a global object "o"')
     except ImportError:
         import code
-        code.interact(banner='Python shell with a global oq object',
-                      local=dict(oq=oq))
+        code.interact(banner='Python shell with a global object "o"',
+                      local=dict(o=o))
