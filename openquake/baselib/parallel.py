@@ -321,22 +321,17 @@ def safely_call(func, args):
     :param func: the function to call
     :param args: the arguments
     """
-    with Monitor('total ' + func.__name__, measuremem=True) as child:
-        if args and hasattr(args[0], 'unpickle'):
-            # args is a list of Pickled objects
-            args = [a.unpickle() for a in args]
-        if args and isinstance(args[-1], Monitor):
-            mon = args[-1]
-            mon.operation = func.__name__
-            mon.children.append(child)  # child is a child of mon
-            child.hdf5path = mon.hdf5path
-        else:
-            mon = child
-        try:
-            res = Result(func(*args), mon)
-        except:
-            _etype, exc, tb = sys.exc_info()
-            res = Result(exc, mon, ''.join(traceback.format_tb(tb)))
+    child = Monitor('total ' + func.__name__, measuremem=True)
+    if args and hasattr(args[0], 'unpickle'):
+        # args is a list of Pickled objects
+        args = [a.unpickle() for a in args]
+    if args and isinstance(args[-1], Monitor):
+        mon = args[-1]
+        mon.operation = func.__name__
+        mon.children.append(child)  # child is a child of mon
+        child.hdf5path = mon.hdf5path
+    else:
+        mon = child
     # FIXME: check_mem_usage is disabled here because it's causing
     # dead locks in threads when log messages are raised.
     # Check is done anyway in other parts of the code
@@ -345,7 +340,18 @@ def safely_call(func, args):
     backurl = getattr(mon, 'backurl', None)
     zsocket = (Socket(backurl, zmq.PUSH, 'connect') if backurl
                else mock.MagicMock())  # do nothing
-    with zsocket:
+    if inspect.isgeneratorfunction(func):
+        genobj = func(*args)
+    else:
+        genobj = (func(*args) for _ in [1])
+    with zsocket, child:
+        try:
+            res = Result(next(genobj), mon)
+        except StopIteration:
+            return 0
+        except:
+            _etype, exc, tb = sys.exc_info()
+            res = Result(exc, mon, ''.join(traceback.format_tb(tb)))
         zsocket.send(res)
     return zsocket.num_sent if backurl else res
 
@@ -656,17 +662,19 @@ class Starmap(object):
         with Socket(self.receiver, zmq.PULL, 'bind') as socket:
             logging.info('Using receiver %s', socket.backurl)
             it = self._iter_celery(socket.backurl)
-            num_results = next(it)
-            yield num_results
+            num_tasks = next(it)
+            yield num_tasks
             isocket = iter(socket)
-            while num_results:
-                res = next(isocket)
-                if self.calc_id and self.calc_id != res.mon.calc_id:
-                    logging.warn('Discarding a result from job %d, since this '
-                                 'is job %d', res.mon.calc_id, self.calc_id)
-                    continue
-                num_results -= next(it)
-                yield res
+            for num_results in it:
+                while num_results:
+                    res = next(isocket)
+                    calc_id = res.mon.calc_id
+                    if self.calc_id and self.calc_id != res.mon.calc_id:
+                        logging.warn('Discarding a result from job %d, since '
+                                     'this is job %d', calc_id, self.calc_id)
+                        continue
+                    num_results -= 1
+                    yield res
 
     def _iter_zmq(self):
         with Socket(self.receiver, zmq.PULL, 'bind') as socket:
