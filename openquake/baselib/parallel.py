@@ -293,6 +293,40 @@ class Result(object):
     :param mon: Monitor instance
     :param tb_str: traceback string (empty if there was no exception)
     """
+    @classmethod
+    def gen(cls, func, args, mon):
+        """
+        :yields: Result objects
+        """
+        it = func(*args)
+        while True:
+            try:
+                with mon:
+                    got = next(it)
+            except StopIteration:
+                break
+            except:
+                _etype, exc, tb = sys.exc_info()
+                res = Result(exc, mon, ''.join(traceback.format_tb(tb)))
+            else:
+                res = Result(got, mon)
+            yield res
+
+    @classmethod
+    def wrap(cls, func, args, mon):
+        """
+        :returns: Result object
+        """
+        try:
+            with mon:
+                got = func(*args)
+        except:
+            _etype, exc, tb = sys.exc_info()
+            res = Result(exc, mon, ''.join(traceback.format_tb(tb)))
+        else:
+            res = Result(got, mon)
+        return res
+
     def __init__(self, val, mon, tb_str=''):
         self.pik = Pickled(val)
         self.mon = mon
@@ -338,22 +372,19 @@ def safely_call(func, args):
     # further investigation is needed
     # check_mem_usage(mon)  # check if too much memory is used
     backurl = getattr(mon, 'backurl', None)
-    zsocket = (Socket(backurl, zmq.PUSH, 'connect') if backurl
-               else mock.MagicMock())  # do nothing
     if inspect.isgeneratorfunction(func):
-        genobj = func(*args)
+        results = Result.gen(func, args, mon)
     else:
-        genobj = (func(*args) for _ in [1])
-    with zsocket, child:
-        try:
-            res = Result(next(genobj), mon)
-        except StopIteration:
-            return 0
-        except:
-            _etype, exc, tb = sys.exc_info()
-            res = Result(exc, mon, ''.join(traceback.format_tb(tb)))
-        zsocket.send(res)
-    return zsocket.num_sent if backurl else res
+        result = Result.wrap(func, args, mon)
+    if backurl:
+        with Socket(backurl, zmq.PUSH, 'connect') as zsocket:
+            if inspect.isgeneratorfunction(func):
+                for res in results:
+                    zsocket.send(res)
+            else:
+                zsocket.send(Result.wrap(func, args, mon))
+            return zsocket.num_sent
+    return list(Result.gen(func, args, mon))
 
 
 if OQ_DISTRIBUTE.startswith('celery'):
