@@ -16,6 +16,7 @@
 #  You should have received a copy of the GNU Affero General Public License
 #  along with OpenQuake.  If not, see <http://www.gnu.org/licenses/>.
 
+import sys
 import time
 import unittest
 import multiprocessing
@@ -24,6 +25,10 @@ from openquake.baselib.workerpool import WorkerMaster, streamer
 from openquake.baselib.parallel import Starmap
 from openquake.baselib.general import _get_free_port
 from openquake.baselib.performance import Monitor
+
+
+if sys.platform == 'win32':
+    raise unittest.SkipTest('temporarily skipped on Windows')
 
 
 def double(x, mon):
