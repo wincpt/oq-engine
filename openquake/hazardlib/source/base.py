@@ -232,6 +232,9 @@ class ParametricSeismicSource(with_metaclass(abc.ABCMeta, BaseSeismicSource)):
         Instance of
         :class:`openquake.hazardlib.tom.PoissonTOM` defining temporal
         occurrence model for calculating rupture occurrence probabilities
+    :param boolean equivalent:
+        Boolean variable indicating if the rupture corresponds to an
+        equivalent one
 
     :raises ValueError:
         If either rupture aspect ratio or rupture mesh spacing is not positive
@@ -240,11 +243,12 @@ class ParametricSeismicSource(with_metaclass(abc.ABCMeta, BaseSeismicSource)):
 
     _slots_ = BaseSeismicSource._slots_ + '''mfd rupture_mesh_spacing
     magnitude_scaling_relationship rupture_aspect_ratio
-    temporal_occurrence_model'''.split()
+    temporal_occurrence_model equivalent'''.split()
 
     def __init__(self, source_id, name, tectonic_region_type, mfd,
                  rupture_mesh_spacing, magnitude_scaling_relationship,
-                 rupture_aspect_ratio, temporal_occurrence_model):
+                 rupture_aspect_ratio, temporal_occurrence_model,
+                 equivalent=False):
         super(ParametricSeismicSource, self). \
             __init__(source_id, name, tectonic_region_type)
 
@@ -259,6 +263,7 @@ class ParametricSeismicSource(with_metaclass(abc.ABCMeta, BaseSeismicSource)):
         self.magnitude_scaling_relationship = magnitude_scaling_relationship
         self.rupture_aspect_ratio = rupture_aspect_ratio
         self.temporal_occurrence_model = temporal_occurrence_model
+        self.equivalent = equivalent
 
     def get_annual_occurrence_rates(self, min_rate=0):
         """

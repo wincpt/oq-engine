@@ -17,8 +17,10 @@
 Module :mod:`openquake.hazardlib.source.point` defines :class:`PointSource`.
 """
 import math
+import numpy
 from openquake.baselib.slots import with_slots
 from openquake.hazardlib.geo import Point, geodetic
+from openquake.hazardlib.scalerel.point import PointMSR
 from openquake.hazardlib.geo.surface.planar import PlanarSurface
 from openquake.hazardlib.source.base import ParametricSeismicSource
 from openquake.hazardlib.source.rupture import ParametricProbabilisticRupture
@@ -114,7 +116,8 @@ class PointSource(ParametricSeismicSource):
         max_mag, _rate = self.get_annual_occurrence_rates()[-1]
         for (np_prob, np) in self.nodal_plane_distribution.data:
             # compute rupture dimensions
-            rup_length, rup_width = self._get_rupture_dimensions(max_mag, np)
+            rup_length, rup_width = self._get_rupture_dimensions(max_mag, np,
+                                                                 False)
             # compute rupture width surface projection
             rup_width = rup_width * math.cos(math.radians(np.dip))
             # the projection radius is half of the rupture diagonal
@@ -183,15 +186,38 @@ class PointSource(ParametricSeismicSource):
         """
         assert 0 < rate_scaling_factor
         for (mag, mag_occ_rate) in self.get_annual_occurrence_rates():
-            for (np_prob, np) in self.nodal_plane_distribution.data:
-                for (hc_prob, hc_depth) in self.hypocenter_distribution.data:
-                    hypocenter = Point(latitude=location.latitude,
-                                       longitude=location.longitude,
-                                       depth=hc_depth)
+            for (hc_prob, hc_depth) in self.hypocenter_distribution.data:
+                hypocenter = Point(latitude=location.latitude,
+                                   longitude=location.longitude,
+                                   depth=hc_depth)
+                #
+                # here we yield an 'equivalent' rupture to be used for sites
+                # beyond a threshold distance
+                prbs = numpy.array([d[0] for d in
+                                    self.nodal_plane_distribution.data])
+                idx = numpy.argmax(prbs)
+                dd = [d[1] for d in self.nodal_plane_distribution.data]
+                np = dd[idx]
+                #
+                # compute the surface of an equivalent rupture using a point
+                # magnitude scaling relationship
+                surface = self._get_rupture_surface(mag, np, hypocenter,
+                                                    True)
+                occurrence_rate = mag_occ_rate * float(hc_prob)
+                occurrence_rate *= rate_scaling_factor
+                yield ParametricProbabilisticRupture(
+                    mag, np.rake, self.tectonic_region_type, hypocenter,
+                    surface, type(self),
+                    occurrence_rate, self.temporal_occurrence_model, True
+                )
+                #
+                # now we yield regular ruptures
+                for (np_prob, np) in self.nodal_plane_distribution.data:
                     occurrence_rate = (
                         mag_occ_rate * float(np_prob) * float(hc_prob))
                     occurrence_rate *= rate_scaling_factor
-                    surface = self._get_rupture_surface(mag, np, hypocenter)
+                    surface = self._get_rupture_surface(mag, np, hypocenter,
+                                                        False)
                     yield ParametricProbabilisticRupture(
                         mag, np.rake, self.tectonic_region_type, hypocenter,
                         surface, type(self),
@@ -207,7 +233,7 @@ class PointSource(ParametricSeismicSource):
                 len(self.nodal_plane_distribution.data) *
                 len(self.hypocenter_distribution.data))
 
-    def _get_rupture_dimensions(self, mag, nodal_plane):
+    def _get_rupture_dimensions(self, mag, nodal_plane, equivalent):
         """
         Calculate and return the rupture length and width
         for given magnitude ``mag`` and nodal plane.
@@ -230,9 +256,11 @@ class PointSource(ParametricSeismicSource):
         depth, the rupture width is shrunken to a maximum possible
         and rupture length is extended to preserve the same area.
         """
-        area = self.magnitude_scaling_relationship.get_median_area(
-            mag, nodal_plane.rake
-        )
+        if equivalent:
+            msr = PointMSR()
+        else:
+            msr = self.magnitude_scaling_relationship
+        area = msr.get_median_area(mag, nodal_plane.rake)
         rup_length = math.sqrt(area * self.rupture_aspect_ratio)
         rup_width = area / rup_length
 
@@ -245,7 +273,7 @@ class PointSource(ParametricSeismicSource):
             rup_length = area / rup_width
         return rup_length, rup_width
 
-    def _get_rupture_surface(self, mag, nodal_plane, hypocenter):
+    def _get_rupture_surface(self, mag, nodal_plane, hypocenter, equivalent):
         """
         Create and return rupture surface object with given properties.
 
@@ -257,6 +285,9 @@ class PointSource(ParametricSeismicSource):
             describing the rupture orientation.
         :param hypocenter:
             Point representing rupture's hypocenter.
+        :param boolean equivalent:
+            A boolean variable specifying is this must be treated as an
+            equivalent rupture
         :returns:
             Instance of :class:`~openquake.hazardlib.geo.surface.planar.PlanarSurface`.
         """
@@ -272,7 +303,8 @@ class PointSource(ParametricSeismicSource):
         azimuth_left = (azimuth_down + 90) % 360
         azimuth_up = (azimuth_left + 90) % 360
 
-        rup_length, rup_width = self._get_rupture_dimensions(mag, nodal_plane)
+        rup_length, rup_width = self._get_rupture_dimensions(mag, nodal_plane,
+                                                             equivalent)
         # calculate the height of the rupture being projected
         # on the vertical plane:
         rup_proj_height = rup_width * math.sin(rdip)
