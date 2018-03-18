@@ -340,7 +340,11 @@ class Result(object):
             val = self.pik.unpickle()
         if self.tb_str:
             etype = val.__class__
-            raise etype('\n%s%s: %s' % (self.tb_str, etype.__name__, val))
+            msg = '\n%s%s: %s' % (self.tb_str, etype.__name__, val)
+            if issubclass(etype, KeyError):
+                raise RuntimeError(msg)  # nicer message
+            else:
+                raise etype(msg)
         return val
 
 
@@ -704,7 +708,10 @@ class Starmap(object):
                         logging.warn('Discarding a result from job %d, since '
                                      'this is job %d', calc_id, self.calc_id)
                         continue
-                    num_results -= 1
+                err = next(it)
+                if isinstance(err, Exception):  # TaskRevokedError
+                    raise err
+                num_results -= 1
                     yield res
 
     def _iter_zmq(self):
