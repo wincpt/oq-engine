@@ -492,7 +492,7 @@ def init_workers():
     return os.getpid()
 
 
-def _wakeup(sec):
+def _wakeup(sec, mon):
     """Waiting function, used to wake up the process pool"""
     time.sleep(sec)
     return os.getpid()
@@ -507,7 +507,8 @@ class Starmap(object):
     def init(cls, poolsize=None):
         if OQ_DISTRIBUTE == 'futures' and not hasattr(cls, 'pool'):
             cls.pool = multiprocessing.Pool(poolsize, init_workers)
-            self = cls(_wakeup, [(.2,) for _ in range(cls.pool._processes)])
+            m = Monitor()
+            self = cls(_wakeup, [(.2, m) for _ in range(cls.pool._processes)])
             cls.pids = list(self)
 
     @classmethod
@@ -587,12 +588,12 @@ class Starmap(object):
         """
         for task_no, args in enumerate(self.task_args, 1):
             mon = args[-1]
-            if isinstance(mon, Monitor):
-                # add incremental task number and task weight
-                mon.task_no = task_no
-                mon.weight = getattr(args[0], 'weight', 1.)
-                mon.backurl = backurl
-                self.calc_id = getattr(mon, 'calc_id', None)
+            assert isinstance(mon, Monitor), mon
+            # add incremental task number and task weight
+            mon.task_no = task_no
+            mon.weight = getattr(args[0], 'weight', 1.)
+            mon.backurl = backurl
+            self.calc_id = getattr(mon, 'calc_id', None)
             if pickle:
                 args = pickle_sequence(args)
                 self.sent += {a: len(p) for a, p in zip(self.argnames, args)}
@@ -634,10 +635,23 @@ class Starmap(object):
 
     def _iter_processes(self):
         safefunc = functools.partial(safely_call, self.task_func)
-        allargs = list(self._genargs())
-        yield len(allargs)
-        for res in self.pool.imap_unordered(safefunc, allargs):
-            yield res
+        with Socket(self.receiver, zmq.PULL, 'bind') as socket:
+            logging.info('Using receiver %s', socket.backurl)
+            allargs = list(self._genargs(socket.backurl))
+            num_results = len(allargs)
+            it = self.pool.imap_unordered(safefunc, allargs)
+            isocket = iter(socket)
+            next(it)
+            yield num_results
+            while num_results:
+                res = next(isocket)
+                if self.calc_id and self.calc_id != res.mon.calc_id:
+                    logging.warn('Discarding a result from job %d, since this '
+                                 'is job %d', res.mon.calc_id, self.calc_id)
+                    continue
+                num_results -= 1
+                yield res
+                next(it)
 
     def iter_native(self, results):
         for task_id, result_dict in ResultSet(results).iter_native():
