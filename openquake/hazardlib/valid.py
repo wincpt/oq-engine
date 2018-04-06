@@ -24,7 +24,6 @@ import re
 import ast
 import logging
 import collections
-from decimal import Decimal
 import numpy
 
 from openquake.baselib.python3compat import with_metaclass
@@ -33,7 +32,8 @@ from openquake.baselib import hdf5
 from openquake.hazardlib import imt, scalerel, gsim
 from openquake.hazardlib.gsim.gmpe_table import GMPETable
 from openquake.hazardlib.calc import disagg
-from openquake.hazardlib.calc.filters import IntegrationDistance
+from openquake.hazardlib.calc.filters import (
+    IntegrationDistance, angular_distance, KM_TO_DEGREES)
 
 SCALEREL = scalerel.get_available_magnitude_scalerel()
 
@@ -474,12 +474,26 @@ def coordinates(value):
     return points
 
 
-def wkt_polygon(value):
+def wkt_polygon(value, maxdist=200):
     """
     Convert a string with a comma separated list of coordinates into
     a WKT polygon, by closing the ring.
+
+    NB: if there is a single point, it is converted into a region
+    by using the maxdist parameter (default 200 km):
+
+    >>> wkt_polygon('0 0')
+    'POLYGON((-1.79864 -1.79864, -1.79864 1.79864, 1.79864 -1.79864, 1.79864 1.79864, -1.79864 -1.79864))'
     """
-    points = ['%s %s' % (lon, lat) for lon, lat, dep in coordinates(value)]
+    coords = coordinates(value)
+    if len(coords) == 1:  # single point
+        lon, lat = coords[0][:2]
+        a1 = maxdist * KM_TO_DEGREES
+        a2 = angular_distance(maxdist, lat)
+        coords = [(lon - a2, lat - a1, 0), (lon - a2, lat + a1, 0),
+                  (lon + a2, lat - a1, 0), (lon + a2, lat + a1, 0)]
+
+    points = ['%s %s' % (lon, lat) for lon, lat, dep in coords]
     # close the linear polygon ring by appending the first coord to the end
     points.append(points[0])
     return 'POLYGON((%s))' % ', '.join(points)

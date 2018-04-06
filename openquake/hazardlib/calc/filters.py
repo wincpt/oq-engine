@@ -70,7 +70,6 @@ try:
 except ImportError:
     rtree = None
 from openquake.baselib.python3compat import raise_
-from openquake.hazardlib.site import SiteCollection
 
 KM_TO_DEGREES = 0.0089932  # 1 degree == 111 km
 DEGREES_TO_RAD = 0.01745329252  # 1 radians = 57.295779513 degrees
