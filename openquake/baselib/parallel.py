@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 # vim: tabstop=4 shiftwidth=4 softtabstop=4
 #
-# Copyright (C) 2010-2017 GEM Foundation
+# Copyright (C) 2010-2018 GEM Foundation
 #
 # OpenQuake is free software: you can redistribute it and/or modify it
 # under the terms of the GNU Affero General Public License as published
@@ -175,8 +175,9 @@ from openquake.baselib.general import (
 cpu_count = multiprocessing.cpu_count()
 OQ_DISTRIBUTE = os.environ.get('OQ_DISTRIBUTE', 'processpool').lower()
 if OQ_DISTRIBUTE == 'futures':  # legacy name
+    print('Warning: OQ_DISTRIBUTE=futures is deprecated', file=sys.stderr)
     OQ_DISTRIBUTE = os.environ['OQ_DISTRIBUTE'] = 'processpool'
-if OQ_DISTRIBUTE not in ('no', 'processpool', 'celery', 'zmq'):
+if OQ_DISTRIBUTE not in ('no', 'processpool', 'threadpool', 'celery', 'zmq'):
     raise ValueError('Invalid oq_distribute=%s' % OQ_DISTRIBUTE)
 
 
@@ -378,26 +379,25 @@ class IterResult(object):
     :param sent:
         the number of bytes sent (0 if OQ_DISTRIBUTE=no)
     """
-    task_data_dt = numpy.dtype(
-        [('taskno', numpy.uint32), ('weight', numpy.float32),
-         ('duration', numpy.float32)])
-
-    def __init__(self, iresults, taskname, num_tasks,
-                 progress=logging.info, sent=0):
+    def __init__(self, iresults, taskname, argnames, num_tasks, sent,
+                 progress=logging.info):
         self.iresults = iresults
         self.name = taskname
+        self.argnames = ' '.join(argnames)
         self.num_tasks = num_tasks
-        self.progress = progress
         self.sent = sent
+        self.progress = progress
         self.received = []
         if self.num_tasks:
             self.log_percent = self._log_percent()
             next(self.log_percent)
         else:
             self.progress('No %s tasks were submitted', self.name)
-        if sent:
-            self.progress('Sent %s of data in %s task(s)',
-                          humansize(sum(sent.values())), num_tasks)
+        self.task_data_dt = numpy.dtype(
+            [('taskno', numpy.uint32), ('weight', numpy.float32),
+             ('duration', numpy.float32), ('received', numpy.int64)])
+        self.progress('Sent %s of data in %s task(s)',
+                      humansize(sent.sum()), num_tasks)
 
     def _log_percent(self):
         yield 0
@@ -429,7 +429,7 @@ class IterResult(object):
                 raise ValueError(result)
             next(self.log_percent)
             if not self.name.startswith('_'):  # no info for private tasks
-                self.save_task_data(result.mon)
+                self.save_task_info(result.mon)
             yield val
 
         if self.received:
@@ -437,17 +437,14 @@ class IterResult(object):
             max_per_task = max(self.received)
             self.progress('Received %s of data, maximum per task %s',
                           humansize(tot), humansize(max_per_task))
-            received = {'max_per_task': max_per_task, 'tot': tot}
-            tname = self.name
-            dic = {tname: {'sent': self.sent, 'received': received}}
-            result.mon.save_info(dic)
 
-    def save_task_data(self, mon):
+    def save_task_info(self, mon):
         if mon.hdf5path:
             duration = mon.children[0].duration  # the task is the first child
-            tup = (mon.task_no, mon.weight, duration)
+            tup = (mon.task_no, mon.weight, duration, self.received[-1])
             data = numpy.array([tup], self.task_data_dt)
-            hdf5.extend3(mon.hdf5path, 'task_info/' + self.name, data)
+            hdf5.extend3(mon.hdf5path, 'task_info/' + self.name, data,
+                         argnames=self.argnames, sent=self.sent)
         mon.flush()
 
     def reduce(self, agg=operator.add, acc=None):
@@ -501,7 +498,6 @@ def _wakeup(sec, mon):
 
 
 class Starmap(object):
-    pids = ()  # FIXME: we can probably remove the pids now
     task_ids = []
     calc_id = None
 
@@ -509,13 +505,14 @@ class Starmap(object):
     def init(cls, poolsize=None):
         if OQ_DISTRIBUTE == 'processpool' and not hasattr(cls, 'pool'):
             cls.pool = multiprocessing.Pool(poolsize, init_workers)
-            m = Monitor()
-            self = cls(_wakeup, [(.2, m) for _ in range(cls.pool._processes)])
-            cls.pids = list(self)
+            m = Monitor('wakeup')
+            cls(_wakeup, [(.2, m) for _ in range(cls.pool._processes)])
+        elif OQ_DISTRIBUTE == 'threadpool' and not hasattr(cls, 'pool'):
+            cls.pool = multiprocessing.dummy.Pool(poolsize)
 
     @classmethod
     def shutdown(cls, poolsize=None):
-        if OQ_DISTRIBUTE == 'processpool' and hasattr(cls, 'pool'):
+        if hasattr(cls, 'pool'):
             cls.pool.close()
             cls.pool.terminate()
             cls.pool.join()
@@ -560,7 +557,6 @@ class Starmap(object):
         else:
             self.progress = logging.info
         self.distribute = distribute or oq_distribute(task_func)
-        self.sent = AccumDict()
         # a task can be a function, a class or an instance with a __call__
         if inspect.isfunction(task_func):
             self.argnames = inspect.getargspec(task_func).args
@@ -570,6 +566,7 @@ class Starmap(object):
             self.argnames = inspect.getargspec(task_func.__call__).args[1:]
         self.receiver = 'tcp://%s:%s' % (
             config.dbserver.host, config.zworkers.receiver_ports)
+        self.sent = numpy.zeros(len(self.argnames))
 
     @property
     def num_tasks(self):
@@ -598,7 +595,7 @@ class Starmap(object):
             self.calc_id = getattr(mon, 'calc_id', None)
             if pickle:
                 args = pickle_sequence(args)
-                self.sent += {a: len(p) for a, p in zip(self.argnames, args)}
+                self.sent += numpy.array([len(p) for p in args])
             if task_no == 1:  # first time
                 self.progress('Submitting %s "%s" tasks', self.num_tasks,
                               self.name)
@@ -610,14 +607,15 @@ class Starmap(object):
         """
         if self.num_tasks == 1 or self.distribute == 'no':
             it = self._iter_sequential()
-        elif self.distribute == 'processpool':
-            it = self._iter_processes()
+        elif self.distribute in ('processpool', 'threadpool'):
+            it = self._iter_pool()
         elif self.distribute == 'celery':
             it = self._iter_celery()
         elif self.distribute == 'zmq':
             it = self._iter_zmq()
         num_tasks = next(it)
-        return IterResult(it, self.name, num_tasks, self.progress, self.sent)
+        return IterResult(it, self.name, self.argnames, num_tasks,
+                          self.sent, self.progress)
 
     def reduce(self, agg=operator.add, acc=None):
         """
@@ -635,7 +633,7 @@ class Starmap(object):
         for args in allargs:
             yield safely_call(self.task_func, args)
 
-    def _iter_processes(self):
+    def _iter_pool(self):
         safefunc = functools.partial(safely_call, self.task_func)
         with Socket(self.receiver, zmq.PULL, 'bind') as socket:
             logging.info('Using receiver %s', socket.backurl)
