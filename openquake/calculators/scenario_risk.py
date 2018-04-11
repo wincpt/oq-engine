@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 # vim: tabstop=4 shiftwidth=4 softtabstop=4
 #
-# Copyright (C) 2014-2017 GEM Foundation
+# Copyright (C) 2014-2018 GEM Foundation
 #
 # OpenQuake is free software: you can redistribute it and/or modify it
 # under the terms of the GNU Affero General Public License as published
@@ -46,7 +46,7 @@ def scenario_risk(riskinput, riskmodel, param, monitor):
     :returns:
         a dictionary {
         'agg': array of shape (E, L, R, 2),
-        'avg': list of tuples (lt_idx, rlz_idx, asset_idx, statistics)
+        'avg': list of tuples (lt_idx, rlz_idx, asset_ordinal, statistics)
         }
         where E is the number of simulated events, L the number of loss types,
         R the number of realizations  and statistics is an array of shape

@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 # vim: tabstop=4 shiftwidth=4 softtabstop=4
 #
-# Copyright (C) 2010-2017 GEM Foundation
+# Copyright (C) 2010-2018 GEM Foundation
 #
 # OpenQuake is free software: you can redistribute it and/or modify it
 # under the terms of the GNU Affero General Public License as published
@@ -34,11 +34,12 @@ import operator
 from collections import namedtuple
 from decimal import Decimal
 import numpy
+from openquake.baselib import hdf5
 from openquake.baselib.general import groupby
 from openquake.baselib.python3compat import raise_
 import openquake.hazardlib.source as ohs
 from openquake.hazardlib.gsim.base import CoeffsTable
-from openquake.hazardlib.gsim.gsim_table import GMPETable
+from openquake.hazardlib.gsim.gmpe_table import GMPETable
 from openquake.hazardlib.imt import from_string
 from openquake.hazardlib import geo, valid, nrml
 from openquake.hazardlib.sourceconverter import (
@@ -60,7 +61,7 @@ class SourceModel(object):
     """
     def __init__(self, names, weight, path, src_groups, num_gsim_paths,
                  ordinal, samples):
-        self.names = names
+        self.names = ' '.join(names.split())  # replace newlines with spaces
         self.weight = weight
         self.path = path
         self.src_groups = src_groups
@@ -1131,6 +1132,7 @@ class SourceModelLogicTree(object):
         def apply_uncertainties(source):
             for branchset, value in branchsets_and_uncertainties:
                 branchset.apply_uncertainty(value, source)
+            return True  # sentinel that the source was changed
         return apply_uncertainties
 
     def samples_by_lt_path(self):
@@ -1190,6 +1192,7 @@ class GsimLogicTree(object):
                 ','.join(self.tectonic_region_types))
         self.values = collections.defaultdict(list)  # {trt: gsims}
         self._ltnode = ltnode or node_from_xml(fname).logicTree
+        self.gmpe_tables = set() # populated right below
         self.all_trts, self.branches = self._build_trts_branches()
         if tectonic_region_types and not self.branches:
             raise InvalidLogicTree(
@@ -1215,6 +1218,25 @@ class GsimLogicTree(object):
                                 raise ValueError(
                                     '%s is out of the period range defined '
                                     'for %s' % (imt, gsim))
+
+    def store_gmpe_tables(self, dstore):
+        """
+        Store the GMPE tables in HDF5 format inside the datastore
+        """
+        dest = dstore.hdf5
+        dirname = os.path.dirname(self.fname)
+        for gmpe_table in sorted(self.gmpe_tables):
+            hdf5path = os.path.join(dirname, gmpe_table)
+            with hdf5.File(hdf5path, 'r') as f:
+                for group in f:
+                    name = '%s/%s' % (gmpe_table, group)
+                    if hasattr(f[group], 'value'):  # dataset, not group
+                        dstore[name] = f[group].value
+                        for k, v in f[group].attrs.items():
+                            dstore[name].attrs[k] = v
+                    else:
+                        grp = dest.require_group(gmpe_table)
+                        f.copy(group, grp)
 
     def __str__(self):
         """
@@ -1297,6 +1319,7 @@ class GsimLogicTree(object):
                             # a bit hackish: set the GMPE_DIR equal to the
                             # directory where the gsim_logic_tree file is
                             GMPETable.GMPE_DIR = os.path.dirname(self.fname)
+                            self.gmpe_tables.add(uncertainty['gmpe_table'])
                         try:
                             gsim = valid.gsim(gsim_name, **uncertainty.attrib)
                         except:

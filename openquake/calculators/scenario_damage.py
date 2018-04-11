@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 # vim: tabstop=4 shiftwidth=4 softtabstop=4
 #
-# Copyright (C) 2014-2017 GEM Foundation
+# Copyright (C) 2014-2018 GEM Foundation
 #
 # OpenQuake is free software: you can redistribute it and/or modify it
 # under the terms of the GNU Affero General Public License as published
@@ -17,20 +17,21 @@
 # along with OpenQuake. If not, see <http://www.gnu.org/licenses/>.
 
 import itertools
+import logging
 import numpy
 
-from openquake.commonlib import riskmodels
-from openquake.risklib import scientific
+from openquake.risklib import scientific, riskmodels
 from openquake.calculators import base, event_based
 
 F32 = numpy.float32
 F64 = numpy.float64
 
 
-def dist_by_asset(data, multi_stat_dt):
+def dist_by_asset(data, multi_stat_dt, number):
     """
     :param data: array of shape (N, R, L, 2, ...)
     :param multi_stat_dt: numpy dtype for statistical outputs
+    :param number: expected number of units per asset
     :returns: array of shape (N, R) with records of type multi_stat_dt
     """
     N, R, L = data.shape[:3]
@@ -38,7 +39,13 @@ def dist_by_asset(data, multi_stat_dt):
     for l, lt in enumerate(multi_stat_dt.names):
         out_lt = out[lt]
         for n, r in itertools.product(range(N), range(R)):
-            out_lt[n, r] = tuple(data[n, r, l])  # (mean, stddev)
+            mean, stddev = data[n, r, l]
+            out_lt[n, r] = (mean, stddev)
+            # sanity check on the sum over all damage states
+            if abs(mean.sum() / number[n] - 1) > 1E-3:
+                logging.warn(
+                    'Asset #%d, rlz=%d, expected %s, got %s for %s damage',
+                    n, r, number[n], mean.sum(), lt)
     return out
 
 
@@ -143,7 +150,7 @@ class ScenarioDamageCalculator(base.RiskCalculator):
         for (l, r, a, stat) in result['d_asset']:
             d_asset[a, r, l] = stat
         self.datastore['dmg_by_asset'] = dist_by_asset(
-            d_asset, multi_stat_dt)
+            d_asset, multi_stat_dt, self.assetcol.array['number'])
 
         # consequence distributions
         if result['c_asset']:

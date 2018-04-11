@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 # vim: tabstop=4 shiftwidth=4 softtabstop=4
 #
-# Copyright (C) 2014-2017 GEM Foundation
+# Copyright (C) 2014-2018 GEM Foundation
 #
 # OpenQuake is free software: you can redistribute it and/or modify it
 # under the terms of the GNU Affero General Public License as published
@@ -21,8 +21,6 @@ import io
 from openquake.baselib.general import writetmp
 from openquake.hazardlib.sourceconverter import SourceConverter
 from openquake.hazardlib.nrml import read, parse, node_to_xml, get_tag_version
-from openquake.risklib import read_nrml
-read_nrml.update_validators()
 
 
 class NrmlTestCase(unittest.TestCase):

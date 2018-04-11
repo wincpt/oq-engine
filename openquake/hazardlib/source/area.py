@@ -1,5 +1,5 @@
 # The Hazard Library
-# Copyright (C) 2012-2017 GEM Foundation
+# Copyright (C) 2012-2018 GEM Foundation
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as
@@ -198,7 +198,7 @@ class AreaSource(ParametricSeismicSource):
             pt = PointSource(
                 # Generate a new ID and name
                 source_id='%s:%s' % (self.source_id, i),
-                name='%s:%s' % (self.name, i),
+                name=self.name,
                 tectonic_region_type=self.tectonic_region_type,
                 mfd=new_mfd,
                 rupture_mesh_spacing=self.rupture_mesh_spacing,

@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 # vim: tabstop=4 shiftwidth=4 softtabstop=4
 #
-# Copyright (C) 2015-2017 GEM Foundation
+# Copyright (C) 2015-2018 GEM Foundation
 #
 # OpenQuake is free software: you can redistribute it and/or modify it
 # under the terms of the GNU Affero General Public License as published
@@ -78,6 +78,8 @@ class ScenarioRiskTestCase(CalculatorTestCase):
         # time_event not specified in job_h.ini but specified in job_r.ini
         out = self.run_calc(case_2d.__file__, 'job_h.ini,job_r.ini',
                             exports='csv')
+        # this is also a case with a single site but an exposure grid,
+        # to test the corner case
         [fname] = out['losses_by_asset', 'csv']
         self.assertEqualFiles('expected/losses_by_asset.csv', fname)
 
@@ -169,13 +171,18 @@ class ScenarioRiskTestCase(CalculatorTestCase):
     def test_case_master(self):
         # a case with two GSIMs
         self.run_calc(case_master.__file__, 'job.ini', exports='npz')
+
+        # check realizations
+        [fname] = export(('realizations', 'csv'), self.calc.datastore)
+        self.assertEqualFiles('expected/realizations.csv', fname)
+
         # check losses by taxonomy
         agglosses = extract(self.calc.datastore, 'agglosses/structural?'
                             'taxonomy=*').array  # shape (T, R) = (3, 2)
         numpy.testing.assert_almost_equal(
-            agglosses, [[1969.55847168, 2363.07958984],
-                        [712.85351562, 924.75616455],
-                        [986.706604, 1344.03710938]])
+            agglosses, [[1981.4678955, 2363.5800781],
+                        [712.8535156, 924.7561646],
+                        [986.706604, 1344.0371094]])
 
         # extract agglosses with a * and a selection
         obj = extract(self.calc.datastore, 'agglosses/structural?'
@@ -183,7 +190,7 @@ class ScenarioRiskTestCase(CalculatorTestCase):
         self.assertEqual(obj.selected, [b'state=*', b'cresta=0.11'])
         self.assertEqual(obj.tags, [b'state=01'])
         numpy.testing.assert_almost_equal(
-            obj.array, [[1299.3848877, 1561.6965332]])
+            obj.array, [[1316.3723145, 1569.1348877]])
 
     @attr('qa', 'risk', 'scenario_risk')
     def test_case_7(self):

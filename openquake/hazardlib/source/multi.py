@@ -1,5 +1,5 @@
 # The Hazard Library
-# Copyright (C) 2012-2017 GEM Foundation
+# Copyright (C) 2012-2018 GEM Foundation
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as
@@ -66,7 +66,7 @@ class MultiPointSource(ParametricSeismicSource):
                 point,
                 self.nodal_plane_distribution,
                 self.hypocenter_distribution)
-            ps.src_group_id = self.src_group_id
+            ps.num_ruptures = ps.count_ruptures()
             yield ps
 
     def __len__(self):

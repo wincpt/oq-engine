@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 # vim: tabstop=4 shiftwidth=4 softtabstop=4
 #
-# Copyright (C) 2014-2017 GEM Foundation
+# Copyright (C) 2014-2018 GEM Foundation
 #
 # OpenQuake is free software: you can redistribute it and/or modify it
 # under the terms of the GNU Affero General Public License as published
@@ -25,7 +25,8 @@ import collections
 import numpy
 
 from openquake.baselib.general import humansize, group_array, DictArray
-from openquake.hazardlib import valid
+from openquake.baselib.node import Node
+from openquake.hazardlib import nrml
 from openquake.hazardlib.imt import from_string
 from openquake.hazardlib.calc import disagg
 from openquake.calculators.views import view
@@ -49,6 +50,11 @@ Consider canceling the operation and accessing directly %s.'''
 
 # with compression you can save 60% of space by losing only 10% of saving time
 savez = numpy.savez_compressed
+
+
+def add_quotes(values):
+    # used to source names in CSV files
+    return ['"%s"' % val for val in values]
 
 
 @export.add(('ruptures', 'xml'))
@@ -97,6 +103,30 @@ def export_ruptures_csv(ekey, dstore):
     comment = 'investigation_time=%s, ses_per_logic_tree_path=%s' % (
         oq.investigation_time, oq.ses_per_logic_tree_path)
     writers.write_csv(dest, rows, header=header, sep='\t', comment=comment)
+    return [dest]
+
+
+@export.add(('site_model', 'xml'))
+def export_site_model(ekey, dstore):
+    dest = dstore.export_path('site_model.xml')
+    site_model_node = Node('siteModel')
+    hdffields = 'lons lats vs30 vs30measured z1pt0 z2pt5 '.split()
+    xmlfields = 'lon lat vs30 vs30Type z1pt0 z2pt5'.split()
+    recs = [tuple(rec[f] for f in hdffields)
+            for rec in dstore['sitecol'].array]
+    unique_recs = sorted(set(recs))
+    for rec in unique_recs:
+        n = Node('site')
+        for f, hdffield in enumerate(hdffields):
+            xmlfield = xmlfields[f]
+            if hdffield == 'vs30measured':
+                value = 'measured' if rec[f] else 'inferred'
+            else:
+                value = rec[f]
+            n[xmlfield] = value
+        site_model_node.append(n)
+    with open(dest, 'wb') as f:
+        nrml.write([site_model_node], f)
     return [dest]
 
 
@@ -268,7 +298,7 @@ def export_hcurves_by_imt_csv(key, kind, rlzs_assoc, fname, sitecol, pmap, oq):
             poes = pmap.setdefault(sid, 0).array[slicedic[imt]]
             hcurves[sid] = (lon, lat, dep) + tuple(poes)
         fnames.append(writers.write_csv(dest, hcurves, comment=_comment(
-            rlzs_assoc, kind, oq.investigation_time) + ',imt=%s' % imt,
+            rlzs_assoc, kind, oq.investigation_time) + ', imt="%s"' % imt,
                                         header=[name for (name, dt) in lst]))
     return fnames
 
@@ -690,37 +720,10 @@ def export_gmf_scenario_csv(ekey, dstore):
     return writer.getsaved()
 
 
-def _gmf_scenario(data, num_sites, imts):
-    # convert data into the composite array expected by QGIS
-    eids = sorted(numpy.unique(data['eid']))
-    eid2idx = {eid: idx for idx, eid in enumerate(eids)}
-    E = len(eid2idx)
-    gmf_dt = numpy.dtype([(imt, (F32, (E,))) for imt in imts])
-    gmfa = numpy.zeros(num_sites, gmf_dt)
-    for rec in data:
-        arr = gmfa[rec['sid']]
-        for imt, gmv in zip(imts, rec['gmv']):
-            arr[imt][eid2idx[rec['eid']]] = gmv
-    return gmfa, E
-
-
 @export.add(('gmf_data', 'npz'))
 def export_gmf_scenario_npz(ekey, dstore):
-    dic = {}
-    oq = dstore['oqparam']
-    mesh = get_mesh(dstore['sitecol'])
-    n = len(mesh)
     fname = dstore.export_path('%s.%s' % ekey)
-    if 'gmf_data' in dstore:
-        data_by_rlzi = group_array(dstore['gmf_data/data'].value, 'rlzi')
-        for rlzi in data_by_rlzi:
-            gmfa, e = _gmf_scenario(data_by_rlzi[rlzi], n, oq.imtls)
-            logging.info('Exporting array of shape %s for rlz %d',
-                         (n, e), rlzi)
-            dic['rlz-%03d' % rlzi] = util.compose_arrays(mesh, gmfa)
-    else:  # nothing to export
-        return []
-    savez(fname, **dic)
+    savez(fname, **dict(extract(dstore, 'gmf_data')))
     return [fname]
 
 
@@ -740,7 +743,7 @@ def export_disagg_xml(ekey, dstore):
         matrix = dstore['disagg/' + key]
         attrs = group[key].attrs
         rlz = rlzs[attrs['rlzi']]
-        poe = attrs['poe_agg']
+        poe_agg = attrs['poe_agg']
         iml = attrs['iml']
         imt, sa_period, sa_damping = from_string(attrs['imt'])
         fname = dstore.export_path(key + '.xml')
@@ -755,11 +758,10 @@ def export_disagg_xml(ekey, dstore):
             lon_bin_edges=attrs['lon_bin_edges'],
             lat_bin_edges=attrs['lat_bin_edges'],
             eps_bin_edges=attrs['eps_bin_edges'],
-            tectonic_region_types=trts,
-        )
-        data = [
-            DisaggMatrix(poe[i], iml, dim_labels, matrix['_'.join(dim_labels)])
-            for i, dim_labels in enumerate(disagg.pmf_map)]
+            tectonic_region_types=trts)
+        data = []
+        for poe, k in zip(poe_agg, oq.disagg_outputs or disagg.pmf_map):
+            data.append(DisaggMatrix(poe, iml, k.split('_'), matrix[k]))
         writer.serialize(data)
         fnames.append(fname)
     return sorted(fnames)
@@ -775,7 +777,7 @@ def save_disagg_to_csv(metadata, matrices):
         '%s=%s' % (key, value) for key, value in metadata.items()
         if value is not None and key not in skip_keys)
     for disag_tup, (poe, iml, matrix, fname) in matrices.items():
-        header = '%s,poe=%s,iml=%.7e\n' % (base_header, poe, iml)
+        header = '%s,poe=%.7f,iml=%.7e\n' % (base_header, poe, iml)
 
         if disag_tup == ('Mag', 'Lon', 'Lat'):
             matrix = numpy.swapaxes(matrix, 0, 1)
@@ -802,29 +804,33 @@ def save_disagg_to_csv(metadata, matrices):
         writers.write_csv(fname, values, comment=header, fmt='%.5E')
 
 
-@export.add(('disagg', 'csv'))
+@export.add(('disagg', 'csv'), ('disagg-stats', 'csv'))
 def export_disagg_csv(ekey, dstore):
     oq = dstore['oqparam']
-    disagg_outputs = oq.disagg_outputs or valid.disagg_outs
+    disagg_outputs = oq.disagg_outputs or disagg.pmf_map
     rlzs = dstore['csm_info'].get_rlzs_assoc().realizations
-    group = dstore['disagg']
+    group = dstore[ekey[0]]
     fnames = []
     trts = dstore.get_attr('csm_info', 'trts')
     for key in group:
-        matrix = dstore['disagg/' + key]
+        matrix = dstore[ekey[0] + '/' + key]
         attrs = group[key].attrs
-        rlz = rlzs[attrs['rlzi']]
+        iml = attrs['iml']
+        try:
+            rlz = rlzs[attrs['rlzi']]
+        except TypeError:  # for stats
+            rlz = attrs['rlzi']
         try:
             poes = [attrs['poe']] * len(disagg_outputs)
         except:  # no poes_disagg were given
             poes = attrs['poe_agg']
-        iml = attrs['iml']
         imt, sa_period, sa_damping = from_string(attrs['imt'])
         lon, lat = attrs['location']
         metadata = collections.OrderedDict()
         # Loads "disaggMatrices" nodes
-        metadata['smlt_path'] = '_'.join(rlz.sm_lt_path)
-        metadata['gsimlt_path'] = rlz.gsim_rlz.uid
+        if hasattr(rlz, 'sm_lt_path'):
+            metadata['smlt_path'] = '_'.join(rlz.sm_lt_path)
+            metadata['gsimlt_path'] = rlz.gsim_rlz.uid
         metadata['imt'] = imt
         metadata['investigation_time'] = oq.investigation_time
         metadata['lon'] = lon
@@ -843,6 +849,27 @@ def export_disagg_csv(ekey, dstore):
             fnames.append(fname)
         save_disagg_to_csv(metadata, data)
     return fnames
+
+
+@export.add(('disagg_by_src', 'csv'))
+def export_disagg_by_src_csv(ekey, dstore):
+    paths = []
+    srcdata = dstore['disagg_by_src/source_id'].value
+    header = ['source_id', 'source_name', 'poe']
+    by_poe = operator.itemgetter(2)
+    for name in dstore['disagg_by_src']:
+        if name == 'source_id':
+            continue
+        probs = dstore['disagg_by_src/' + name].value
+        ok = probs > 0
+        src = srcdata[ok]
+        data = [header] + sorted(
+            zip(src['source_id'], add_quotes(src['source_name']), probs[ok]),
+            key=by_poe, reverse=True)
+        path = dstore.export_path(name + '_Src.csv')
+        writers.write_csv(path, data, fmt='%.7e')
+        paths.append(path)
+    return paths
 
 
 @export.add(('realizations', 'csv'))

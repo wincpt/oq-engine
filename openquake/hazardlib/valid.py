@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 # vim: tabstop=4 shiftwidth=4 softtabstop=4
 #
-# Copyright (C) 2013-2017 GEM Foundation
+# Copyright (C) 2013-2018 GEM Foundation
 #
 # OpenQuake is free software: you can redistribute it and/or modify it
 # under the terms of the GNU Affero General Public License as published
@@ -31,15 +31,13 @@ from openquake.baselib.python3compat import with_metaclass
 from openquake.baselib.general import distinct
 from openquake.baselib import hdf5
 from openquake.hazardlib import imt, scalerel, gsim
-from openquake.hazardlib.gsim.gsim_table import GMPETable
+from openquake.hazardlib.gsim.gmpe_table import GMPETable
 from openquake.hazardlib.calc import disagg
 from openquake.hazardlib.calc.filters import IntegrationDistance
 
 SCALEREL = scalerel.get_available_magnitude_scalerel()
 
 GSIM = gsim.get_available_gsims()
-
-disagg_outs = ['_'.join(tup) for tup in sorted(disagg.pmf_map)]
 
 
 def disagg_outputs(value):
@@ -53,7 +51,7 @@ def disagg_outputs(value):
     """
     values = value.replace(',', ' ').split()
     for val in values:
-        if val not in disagg_outs:
+        if val not in disagg.pmf_map:
             raise ValueError('Invalid disagg output: %s' % val)
     return values
 
@@ -461,14 +459,18 @@ def coordinates(value):
     >>> coordinates('0 0 0, 0 0 -1')
     Traceback (most recent call last):
     ...
-    ValueError: There are overlapping points in 0 0 0, 0 0 -1
+    ValueError: Found overlapping site #2,  0 0 -1
     """
     if not value.strip():
         raise ValueError('Empty list of coordinates: %r' % value)
-    points = list(map(point, value.split(',')))
-    num_distinct = len(set(pnt[:2] for pnt in points))
-    if num_distinct < len(points):
-        raise ValueError("There are overlapping points in %s" % value)
+    points = []
+    pointset = set()
+    for i, line in enumerate(value.split(','), 1):
+        pnt = point(line)
+        if pnt[:2] in pointset:
+            raise ValueError("Found overlapping site #%d, %s" % (i, line))
+        pointset.add(pnt[:2])
+        points.append(pnt)
     return points
 
 
@@ -836,7 +838,7 @@ def pmf(value):
     [(0.157, 0), (0.843, 1)]
     """
     probs = probabilities(value)
-    if sum(map(Decimal, value.split())) != 1:
+    if abs(1.-sum(map(float, value.split()))) > 1e-12:
         raise ValueError('The probabilities %s do not sum up to 1!' % value)
     return [(p, i) for i, p in enumerate(probs)]
 
@@ -1001,7 +1003,7 @@ def simple_slice(value):
 vs30_type = ChoiceCI('measured', 'inferred')
 
 SiteParam = collections.namedtuple(
-    'SiteParam', 'lon lat depth z1pt0 z2pt5 measured vs30 backarc'.split())
+    'SiteParam', 'lon lat depth z1pt0 z2pt5 vs30measured vs30 backarc'.split())
 
 
 def site_param(z1pt0, z2pt5, vs30Type, vs30, lon, lat,
@@ -1012,10 +1014,10 @@ def site_param(z1pt0, z2pt5, vs30Type, vs30, lon, lat,
        <site lon="24.7125" lat="42.779167" vs30="462" vs30Type="inferred"
        z1pt0="100" z2pt5="5" backarc="False"/>
 
-    into a 7-tuple (z1pt0, z2pt5, measured, vs30, backarc, lon, lat)
+    into a 7-tuple (z1pt0, z2pt5, vs30measured, vs30, backarc, lon, lat)
     """
     return SiteParam(z1pt0=positivefloat(z1pt0), z2pt5=positivefloat(z2pt5),
-                     measured=vs30_type(vs30Type) == 'measured',
+                     vs30measured=vs30_type(vs30Type) == 'measured',
                      vs30=positivefloat(vs30), lon=longitude(lon),
                      lat=latitude(lat), depth=float_(depth),
                      backarc=boolean(backarc))

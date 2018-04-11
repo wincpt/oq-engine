@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 # vim: tabstop=4 shiftwidth=4 softtabstop=4
 #
-# Copyright (C) 2012-2017 GEM Foundation
+# Copyright (C) 2012-2018 GEM Foundation
 #
 # OpenQuake is free software: you can redistribute it and/or modify it
 # under the terms of the GNU Affero General Public License as published
@@ -369,16 +369,16 @@ class ContextMaker(object):
         """
         sitemesh = sitecol.mesh
         acc = AccumDict(accum=[])
-        ctx_mon = monitor('disagg_contexts', measuremem=False)
+        ctx_mon = monitor('make_contexts', measuremem=False)
         pne_mon = monitor('disaggregate_pne', measuremem=False)
         for rupture in ruptures:
             with ctx_mon:
                 sctx, rctx, orig_dctx = self.make_contexts(
                     sitecol, rupture, filter=False)
-            if (self.maximum_distance and
-                orig_dctx.rjb.min() > self.maximum_distance(
-                    rupture.tectonic_region_type, rupture.mag)):
-                continue  # rupture away from all sites
+                if (self.maximum_distance and
+                    orig_dctx.rjb.min() > self.maximum_distance(
+                        rupture.tectonic_region_type, rupture.mag)):
+                    continue  # rupture away from all sites
             cache = {}
             for r, gsim in self.gsim_by_rlzi.items():
                 dctx = orig_dctx.roundup(gsim.minimum_distance)

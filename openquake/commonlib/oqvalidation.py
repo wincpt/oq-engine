@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 # vim: tabstop=4 shiftwidth=4 softtabstop=4
 #
-# Copyright (C) 2014-2017 GEM Foundation
+# Copyright (C) 2014-2018 GEM Foundation
 #
 # OpenQuake is free software: you can redistribute it and/or modify it
 # under the terms of the GNU Affero General Public License as published
@@ -22,17 +22,18 @@ import functools
 import multiprocessing
 import numpy
 
-from openquake.baselib import parallel, datastore
+from openquake.baselib import datastore
 from openquake.baselib.general import DictArray
 from openquake.hazardlib.imt import from_string
 from openquake.hazardlib import correlation, stats
 from openquake.hazardlib import valid, InvalidFile
 from openquake.commonlib import logictree
-from openquake.commonlib.riskmodels import get_risk_files
+from openquake.risklib.riskmodels import get_risk_files
 
 GROUND_MOTION_CORRELATION_MODELS = ['JB2009']
 TWO16 = 2 ** 16  # 65536
 F32 = numpy.float32
+F64 = numpy.float64
 
 
 class OqParam(valid.ParamSet):
@@ -53,7 +54,7 @@ class OqParam(valid.ParamSet):
     coordinate_bin_width = valid.Param(valid.positivefloat)
     compare_with_classical = valid.Param(valid.boolean, False)
     concurrent_tasks = valid.Param(
-        valid.positiveint, multiprocessing.cpu_count())
+        valid.positiveint, multiprocessing.cpu_count() * 3)  # by M. Simionato
     conditional_loss_poes = valid.Param(valid.probabilities, [])
     continuous_fragility_discretization = valid.Param(valid.positiveint, 20)
     description = valid.Param(valid.utf8_not_empty)
@@ -126,9 +127,10 @@ class OqParam(valid.ParamSet):
     ses_per_logic_tree_path = valid.Param(valid.positiveint, 1)
     ses_seed = valid.Param(valid.positiveint, 42)
     max_site_model_distance = valid.Param(valid.positivefloat, 5)  # by Graeme
+    shakemap_id = valid.Param(valid.simple_id, None)
     sites = valid.Param(valid.NoneOr(valid.coordinates), None)
     sites_disagg = valid.Param(valid.NoneOr(valid.coordinates), [])
-    sites_per_tile = valid.Param(valid.positiveint, 20000)
+    sites_per_tile = valid.Param(valid.positiveint, 30000)  # by M. Simionato
     sites_slice = valid.Param(valid.simple_slice, (None, None))
     sm_lt_path = valid.Param(valid.logic_tree_path, None)
     specific_assets = valid.Param(valid.namelist, [])
@@ -332,7 +334,13 @@ class OqParam(valid.ParamSet):
         Return the cost types of the computation (including `occupants`
         if it is there) in order.
         """
-        return sorted(self.risk_files)
+        costtypes = sorted(self.risk_files)
+        if not costtypes and self.hazard_calculation_id:
+            with datastore.read(self.hazard_calculation_id) as ds:
+                parent = ds['oqparam']
+            self._file_type, self._risk_files = get_risk_files(parent.inputs)
+            costtypes = sorted(self.risk_files)
+        return costtypes
 
     def set_risk_imtls(self, risk_models):
         """
@@ -618,10 +626,18 @@ class OqParam(valid.ParamSet):
         Invalid calculation_mode="{calculation_mode}" or missing
         fragility_file/vulnerability_file in the .ini file.
         """
+        if self.hazard_calculation_id:
+            parent_datasets = set(datastore.read(self.hazard_calculation_id))
+        else:
+            parent_datasets = set()
         if 'damage' in self.calculation_mode:
-            return any(key.endswith('_fragility') for key in self.inputs)
+            return any(
+                key.endswith('_fragility') for key in self.inputs
+            ) or 'composite_risk_model' in parent_datasets
         elif 'risk' in self.calculation_mode:
-            return any(key.endswith('_vulnerability') for key in self.inputs)
+            return any(
+                key.endswith('_vulnerability') for key in self.inputs
+            ) or 'composite_risk_model' in parent_datasets
         return True
 
     def is_valid_complex_fault_mesh_spacing(self):

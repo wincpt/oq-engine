@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 # vim: tabstop=4 shiftwidth=4 softtabstop=4
 #
-# Copyright (C) 2012-2017 GEM Foundation
+# Copyright (C) 2012-2018 GEM Foundation
 #
 # OpenQuake is free software: you can redistribute it and/or modify it
 # under the terms of the GNU Affero General Public License as published
@@ -61,7 +61,6 @@ from openquake.baselib.python3compat import zip
 from openquake.baselib.performance import Monitor
 from openquake.baselib.parallel import sequential_apply
 from openquake.baselib.general import DictArray, groupby, AccumDict
-from openquake.hazardlib.source import split_source
 from openquake.hazardlib.probability_map import ProbabilityMap
 from openquake.hazardlib.gsim.base import ContextMaker
 from openquake.hazardlib.gsim.base import GroundShakingIntensityModel
@@ -83,10 +82,8 @@ def classical(group, src_filter, gsims, param, monitor=Monitor()):
     if getattr(group, 'src_interdep', None) == 'mutex':
         mutex_weight = {src.source_id: weight for src, weight in
                         zip(group.sources, group.srcs_weights)}
-        srcs = group.sources
     else:
         mutex_weight = None
-        srcs = sum([split_source(src) for src in group], [])
     grp_ids = set()
     for src in group:
         grp_ids.update(src.src_group_ids)
@@ -102,7 +99,7 @@ def classical(group, src_filter, gsims, param, monitor=Monitor()):
         # AccumDict of arrays with 4 elements weight, nsites, calc_time, split
         pmap.calc_times = AccumDict(accum=numpy.zeros(4))
         pmap.eff_ruptures = AccumDict()  # grp_id -> num_ruptures
-        for src, s_sites in src_filter(srcs):  # filter now
+        for src, s_sites in src_filter(group):  # filter now
             t0 = time.time()
             indep = group.rup_interdep == 'indep' if mutex_weight else True
             poemap = cmaker.poe_map(
@@ -181,12 +178,13 @@ def calc_hazard_curves(
     pmap = ProbabilityMap(len(imtls.array), 1)
     # Processing groups with homogeneous tectonic region
     gsim = gsim_by_trt[groups[0][0].tectonic_region_type]
+    mon = Monitor()
     for group in groups:
         if group.src_interdep == 'mutex':  # do not split the group
-            it = [classical(group, ss_filter, [gsim], param)]
+            it = [classical(group, ss_filter, [gsim], param, mon)]
         else:  # split the group and apply `classical` in parallel
             it = apply(
-                classical, (group, ss_filter, [gsim], param),
+                classical, (group, ss_filter, [gsim], param, mon),
                 weight=operator.attrgetter('weight'))
         for res in it:
             for grp_id in res:

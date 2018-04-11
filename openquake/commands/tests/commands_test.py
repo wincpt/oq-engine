@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 # vim: tabstop=4 shiftwidth=4 softtabstop=4
 #
-# Copyright (C) 2015-2017 GEM Foundation
+# Copyright (C) 2015-2018 GEM Foundation
 #
 # OpenQuake is free software: you can redistribute it and/or modify it
 # under the terms of the GNU Affero General Public License as published
@@ -218,7 +218,7 @@ class RunShowExportTestCase(unittest.TestCase):
         with Print.patch() as p:
             show('slow_sources', self.calc_id)
         self.assertIn('source_id source_class num_ruptures calc_time '
-                      'num_sites num_split', str(p))
+                      'split_time num_sites num_split', str(p))
 
     def test_show_attrs(self):
         with Print.patch() as p:

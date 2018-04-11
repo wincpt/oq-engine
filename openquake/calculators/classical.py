@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 # vim: tabstop=4 shiftwidth=4 softtabstop=4
 #
-# Copyright (C) 2014-2017 GEM Foundation
+# Copyright (C) 2014-2018 GEM Foundation
 #
 # OpenQuake is free software: you can redistribute it and/or modify it
 # under the terms of the GNU Affero General Public License as published
@@ -22,9 +22,9 @@ import logging
 import operator
 import numpy
 
-from openquake.baselib import parallel
+from openquake.baselib import parallel, hdf5
 from openquake.baselib.python3compat import encode
-from openquake.baselib.general import AccumDict
+from openquake.baselib.general import AccumDict, block_splitter
 from openquake.hazardlib.calc.hazard_curve import classical, ProbabilityMap
 from openquake.hazardlib.stats import compute_pmap_stats
 from openquake.hazardlib import source
@@ -38,7 +38,8 @@ F32 = numpy.float32
 F64 = numpy.float64
 weight = operator.attrgetter('weight')
 
-
+grp_source_dt = numpy.dtype([('grp_id', U16), ('source_id', hdf5.vstr),
+                             ('source_name', hdf5.vstr)])
 source_data_dt = numpy.dtype(
     [('taskno', U16), ('nsites', U32), ('nruptures', U32), ('weight', F32)])
 
@@ -98,8 +99,8 @@ class PSHACalculator(base.HazardCalculator):
             for srcid, (srcweight, nsites, calc_time, split) in \
                     pmap_by_grp.calc_times.items():
                 info = self.csm.infos[srcid]
-                info.calc_time += calc_time
                 info.num_sites += nsites
+                info.calc_time += calc_time
                 info.num_split += split
         return acc
 
@@ -113,7 +114,6 @@ class PSHACalculator(base.HazardCalculator):
         for grp in self.csm.src_groups:
             num_gsims = len(csm_info.gsim_lt.get_gsims(grp.trt))
             zd[grp.id] = ProbabilityMap(num_levels, num_gsims)
-        zd.calc_times = []
         zd.eff_ruptures = AccumDict()  # grp_id -> eff_ruptures
         return zd
 
@@ -169,19 +169,25 @@ class PSHACalculator(base.HazardCalculator):
         for tile_i, tile in enumerate(tiles, 1):
             num_tasks = 0
             num_sources = 0
-            with self.monitor('prefiltering'):
+            if num_tiles > 1:
                 logging.info('Prefiltering tile %d of %d', tile_i, len(tiles))
+            else:
+                logging.info('Prefiltering sources')
+            with self.monitor('prefiltering'):
                 src_filter = SourceFilter(tile, oq.maximum_distance)
                 csm = self.csm.filter(src_filter)
-                totweight += csm.weight
             if tile_i == 1:  # set it only on the first tile
-                maxweight = csm.get_maxweight(tasks_per_tile, minweight)
+                maxweight = csm.get_maxweight(
+                    weight, tasks_per_tile, minweight)
                 if maxweight == minweight:
                     logging.info('Using minweight=%d', minweight)
                 else:
                     logging.info('Using maxweight=%d', maxweight)
+                totweight += csm.info.tot_weight
+            else:
+                totweight += csm.get_weight(weight)
             if csm.has_dupl_sources and not opt:
-                logging.warn('Found %d duplicated sources, use oq info',
+                logging.warn('Found %d duplicated sources',
                              csm.has_dupl_sources)
             for sg in csm.src_groups:
                 if sg.src_interdep == 'mutex':
@@ -190,15 +196,14 @@ class PSHACalculator(base.HazardCalculator):
                     num_tasks += 1
                     num_sources += len(sg.sources)
             # NB: csm.get_sources_by_trt discards the mutex sources
-            for trt, sources in csm.get_sources_by_trt(opt).items():
+            for trt, sources in csm.get_sources_by_trt().items():
                 gsims = self.csm.info.gsim_lt.get_gsims(trt)
-                for block in csm.split_in_blocks(maxweight, sources):
+                for block in block_splitter(sources, maxweight, weight):
                     yield block, src_filter, gsims, param, monitor
                     num_tasks += 1
                     num_sources += len(block)
             logging.info('Sent %d sources in %d tasks', num_sources, num_tasks)
         self.csm.info.tot_weight = totweight
-        source.split_map.clear()
 
     def post_execute(self, pmap_by_grp_id):
         """
@@ -207,18 +212,30 @@ class PSHACalculator(base.HazardCalculator):
         :param pmap_by_grp_id:
             a dictionary grp_id -> hazard curves
         """
+        oq = self.oqparam
         grp_trt = self.csm.info.grp_by("trt")
-        grp_name = self.csm.info.grp_by("name")
+        grp_source = self.csm.info.grp_by("name")
+        if oq.disagg_by_src:
+            src_name = {src.src_group_id: src.name
+                        for src in self.csm.get_sources()}
+        data = []
         with self.monitor('saving probability maps', autoflush=True):
             for grp_id, pmap in pmap_by_grp_id.items():
                 if pmap:  # pmap can be missing if the group is filtered away
                     fix_ones(pmap)  # avoid saving PoEs == 1
                     key = 'poes/grp-%02d' % grp_id
                     self.datastore[key] = pmap
-                    self.datastore.set_attrs(key, trt=grp_trt[grp_id],
-                                             name=str(grp_name[grp_id]))
+                    self.datastore.set_attrs(key, trt=grp_trt[grp_id])
+                    if oq.disagg_by_src:
+                        data.append(
+                            (grp_id, grp_source[grp_id], src_name[grp_id]))
             if 'poes' in self.datastore:
                 self.datastore.set_nbytes('poes')
+                if oq.disagg_by_src and self.csm.info.get_num_rlzs() == 1:
+                    # this is useful for disaggregation, which is implemented
+                    # only for the case of a single realization
+                    self.datastore['disagg_by_src/source_id'] = numpy.array(
+                        sorted(data), grp_source_dt)
 
 
 def fix_ones(pmap):

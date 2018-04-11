@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 # vim: tabstop=4 shiftwidth=4 softtabstop=4
 #
-# Copyright (C) 2014-2017 GEM Foundation
+# Copyright (C) 2014-2018 GEM Foundation
 #
 # OpenQuake is free software: you can redistribute it and/or modify it
 # under the terms of the GNU Affero General Public License as published
@@ -51,6 +51,7 @@ class ScenarioCalculator(base.HazardCalculator):
         gsim_lt = readinput.get_gsim_lt(oq)
         cinfo = source.CompositionInfo.fake(gsim_lt)
         self.datastore['csm_info'] = cinfo
+        self.datastore['oqparam'] = oq
         self.rlzs_assoc = cinfo.get_rlzs_assoc()
 
     def init(self):

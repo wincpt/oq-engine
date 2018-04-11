@@ -1,20 +1,20 @@
-#  -*- coding: utf-8 -*-
-#  vim: tabstop=4 shiftwidth=4 softtabstop=4
-
-#  Copyright (c) 2016-2017 GEM Foundation
-
-#  OpenQuake is free software: you can redistribute it and/or modify it
-#  under the terms of the GNU Affero General Public License as published
-#  by the Free Software Foundation, either version 3 of the License, or
-#  (at your option) any later version.
-
-#  OpenQuake is distributed in the hope that it will be useful,
-#  but WITHOUT ANY WARRANTY; without even the implied warranty of
-#  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-#  GNU Affero General Public License for more details.
-
-#  You should have received a copy of the GNU Affero General Public License
-#  along with OpenQuake.  If not, see <http://www.gnu.org/licenses/>.
+# -*- coding: utf-8 -*-
+# vim: tabstop=4 shiftwidth=4 softtabstop=4
+#
+# Copyright (c) 2016-2018 GEM Foundation
+#
+# OpenQuake is free software: you can redistribute it and/or modify it
+# under the terms of the GNU Affero General Public License as published
+# by the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# OpenQuake is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU Affero General Public License for more details.
+#
+# You should have received a copy of the GNU Affero General Public License
+# along with OpenQuake.  If not, see <http://www.gnu.org/licenses/>.
 """
 Utilities to compute mean and quantile curves
 """
@@ -179,3 +179,24 @@ def apply_stat(f, arraylist, *extra, **kw):
         return new
     else:  # simple array
         return f(arraylist, *extra, **kw)
+
+
+def set_rlzs_stats(dstore, prefix, arrayNR=None):
+    """
+    :param dstore: a DataStore object
+    :param prefix: dataset prefix
+    :param arrayNR: an array of shape (N, R, ...)
+    """
+    if arrayNR is None:
+        # assume the -rlzs array is already stored
+        arrayNR = dstore[prefix + '-rlzs'].value
+    else:
+        # store passed the -rlzs array
+        dstore[prefix + '-rlzs'] = arrayNR
+    R = arrayNR.shape[1]
+    if R > 1:
+        stats = dstore['oqparam'].risk_stats()
+        statnames, statfuncs = zip(*stats)
+        weights = dstore['csm_info'].rlzs['weight']
+        dstore[prefix + '-stats'] = compute_stats2(arrayNR, statfuncs, weights)
+        dstore.set_attrs(prefix + '-stats', stats=' '.join(statnames))

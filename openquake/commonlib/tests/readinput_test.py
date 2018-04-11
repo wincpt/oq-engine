@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 # vim: tabstop=4 shiftwidth=4 softtabstop=4
 #
-# Copyright (C) 2014-2017 GEM Foundation
+# Copyright (C) 2014-2018 GEM Foundation
 #
 # OpenQuake is free software: you can redistribute it and/or modify it
 # under the terms of the GNU Affero General Public License as published
@@ -29,6 +29,7 @@ from numpy.testing import assert_allclose
 
 from openquake.baselib import general
 from openquake.hazardlib import valid, InvalidFile
+from openquake.risklib import asset
 from openquake.risklib.riskinput import ValidationError
 from openquake.commonlib import readinput, writers, oqvalidation
 from openquake.qa_tests_data.classical import case_1, case_2
@@ -69,12 +70,14 @@ export_dir = %s
 
     def test_get_oqparam_with_files(self):
         temp_dir = tempfile.mkdtemp()
+        source_model_input = general.writetmp(dir=temp_dir)
         site_model_input = general.writetmp(dir=temp_dir, content="foo")
         job_config = general.writetmp(dir=temp_dir, content="""
 [general]
 calculation_mode = event_based
 [site]
 sites = 0 0
+source_model_file = %s
 site_model_file = %s
 maximum_distance=1
 truncation_level=0
@@ -82,7 +85,8 @@ random_seed=0
 intensity_measure_types = PGA
 investigation_time = 50
 export_dir = %s
-        """ % (os.path.basename(site_model_input), TMP))
+        """ % (os.path.basename(source_model_input),
+               os.path.basename(site_model_input), TMP))
 
         try:
             exp_base_path = os.path.dirname(job_config)
@@ -95,25 +99,26 @@ export_dir = %s
                 'random_seed': 0,
                 'maximum_distance': {'default': 1},
                 'inputs': {'job_ini': job_config,
-                           'site_model': site_model_input},
+                           'site_model': site_model_input,
+                           'source': [source_model_input],
+                           'source_model': source_model_input},
                 'sites': [(0.0, 0.0, 0.0)],
                 'hazard_imtls': {'PGA': None},
                 'investigation_time': 50.0,
                 'risk_investigation_time': 50.0,
             }
 
-            with mock.patch('logging.warn') as warn:
-                params = getparams(readinput.get_oqparam(job_config, hc_id=1))
-                for key in expected_params:
-                    self.assertEqual(expected_params[key], params[key])
-                items = sorted(params['inputs'].items())
-                keys, values = zip(*items)
-                self.assertEqual(('job_ini', 'site_model'), keys)
-                self.assertEqual((job_config, site_model_input), values)
+            params = getparams(readinput.get_oqparam(job_config))
+            for key in expected_params:
+                self.assertEqual(expected_params[key], params[key])
+            items = sorted(params['inputs'].items())
+            keys, values = zip(*items)
+            self.assertEqual(('job_ini', 'site_model', 'source',
+                              'source_model'), keys)
+            self.assertEqual((job_config, site_model_input,
+                              [source_model_input], source_model_input),
+                             values)
 
-                # checking that warnings work
-                self.assertIn('Please remove site_model_file from',
-                              warn.call_args[0][0])
         finally:
             shutil.rmtree(temp_dir)
 
@@ -207,8 +212,9 @@ reference_depth_to_2pt5km_per_sec = 5.0
 reference_depth_to_1pt0km_per_sec = 100.0
 intensity_measure_types = PGA
 investigation_time = 50.
+source_model_file = fake.xml
 """)
-        oqparam = readinput.get_oqparam(source, hc_id=1)
+        oqparam = readinput.get_oqparam(source)
         with self.assertRaises(ValueError) as ctx:
             readinput.get_site_collection(oqparam)
         self.assertIn('Could not discretize region', str(ctx.exception))
@@ -244,20 +250,11 @@ class ClosestSiteModelTestCase(unittest.TestCase):
         oqparam = mock.Mock()
         oqparam.base_path = '/'
         oqparam.inputs = dict(site_model=sitemodel())
-        expected = [
-            valid.SiteParam(z1pt0=100.0, z2pt5=2.0, measured=False,
-                            vs30=1200.0, backarc=False, lon=0.0, lat=0.0,
-                            depth=0.0),
-            valid.SiteParam(z1pt0=100.0, z2pt5=2.0, measured=False,
-                            vs30=600.0, backarc=True, lon=0.0, lat=0.1,
-                            depth=0.0),
-            valid.SiteParam(z1pt0=100.0, z2pt5=2.0, measured=False,
-                            vs30=200.0, backarc=False, lon=0.0, lat=0.2,
-                            depth=0.0)]
-        self.assertEqual(list(readinput.get_site_model(oqparam)), expected)
+        self.assertEqual(len(readinput.get_site_model(oqparam)), 3)
 
     def test_get_far_away_parameter(self):
         oqparam = mock.Mock()
+        oqparam.hazard_calculation_id = None
         oqparam.base_path = '/'
         oqparam.maximum_distance = 100
         oqparam.max_site_model_distance = 5
@@ -267,10 +264,9 @@ class ClosestSiteModelTestCase(unittest.TestCase):
             readinput.get_site_collection(oqparam)
         # check that the warning was raised
         self.assertEqual(
-            warn.call_args[0][0],
-            'The site parameter associated to '
-            '<Latitude=0.000000, Longitude=2.000000, Depth=0.0000> '
-            'came from a distance of 222 km!')
+            warn.call_args[0],
+            ('Association to %s km from site (%s %s)',
+             222.38985328911747, 2.0, 0.0))
 
 
 class ExposureTestCase(unittest.TestCase):
@@ -396,8 +392,7 @@ class ExposureTestCase(unittest.TestCase):
 </nrml>''')
 
     def test_get_metadata(self):
-        exp, _assets = readinput._get_exposure(
-            self.exposure, ['structural'], stop='assets')
+        exp, _assets = asset._get_exposure(self.exposure, stop='assets')
         self.assertEqual(exp.description, 'Exposure model for buildings')
         self.assertIsNone(exp.insurance_limit_is_absolute)
         self.assertIsNone(exp.deductible_is_absolute)
@@ -777,6 +772,11 @@ class GetCompositeSourceModelTestCase(unittest.TestCase):
         csm = readinput.get_composite_source_model(oq, in_memory=False)
         srcs = csm.get_sources()  # a single PointSource
         self.assertEqual(len(srcs), 1)
+
+    def test_reduce_source_model(self):
+        case2 = os.path.dirname(case_2.__file__)
+        smlt = os.path.join(case2, 'source_model_logic_tree.xml')
+        readinput.reduce_source_model(smlt, [])
 
 
 class GetCompositeRiskModelTestCase(unittest.TestCase):

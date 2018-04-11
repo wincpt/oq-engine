@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 # vim: tabstop=4 shiftwidth=4 softtabstop=4
 #
-# Copyright (C) 2015-2017 GEM Foundation
+# Copyright (C) 2015-2018 GEM Foundation
 #
 # OpenQuake is free software: you can redistribute it and/or modify it
 # under the terms of the GNU Affero General Public License as published
@@ -76,7 +76,7 @@ RM       4,000
         test_dir = os.path.dirname(case_1c.__file__)
         self.run_calc(test_dir, 'job.ini', exports='csv')
         total = extract(self.calc.datastore, 'aggdamages/structural')
-        aae([[0.47999877, 0.35379884, 0.06553464, 0.01844897, 0.08221881]],
+        aae([[0.4799988, 0.3537988, 0.0655346, 0.018449, 0.0822188]],
             total)  # shape (R, D) = (1, 5)
 
     @attr('qa', 'risk', 'scenario_damage')

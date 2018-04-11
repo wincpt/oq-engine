@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 # vim: tabstop=4 shiftwidth=4 softtabstop=4
 #
-# Copyright (C) 2012-2017 GEM Foundation
+# Copyright (C) 2012-2018 GEM Foundation
 #
 # OpenQuake is free software: you can redistribute it and/or modify it
 # under the terms of the GNU Affero General Public License as published
@@ -534,6 +534,8 @@ class FragilityFunctionDiscrete(object):
         """
         highest_iml = self.imls[-1]
         imls = numpy.array(imls)
+        if imls.sum() == 0.0:
+            return numpy.zeros_like(imls)
         imls[imls > highest_iml] = highest_iml
         result = self.interp(imls)
         if self.no_damage_limit:
@@ -563,6 +565,7 @@ class FragilityFunctionList(list):
     A list of fragility functions with common attributes; there is a
     function for each limit state.
     """
+    # NB: the list is populated after instantiation by .append calls
     def __init__(self, array, **attrs):
         self.array = array
         vars(self).update(attrs)
@@ -570,6 +573,36 @@ class FragilityFunctionList(list):
     def mean_loss_ratios_with_steps(self, steps):
         """For compatibility with vulnerability functions"""
         return fine_graining(self.imls, steps)
+
+    def build(self, limit_states, discretization, steps_per_interval):
+        """
+        :param limit_states: a sequence of limit states
+        :param discretization: continouos fragility discretization parameter
+        :param steps_per_interval: steps_per_interval parameter
+        :returns: a populated FragilityFunctionList instance
+        """
+        new = copy.copy(self)
+        add_zero = (self.format == 'discrete' and
+                    self.nodamage is not None and self.nodamage < self.imls[0])
+        new.imls = build_imls(new, discretization)
+        if steps_per_interval > 1:
+            new.interp_imls = build_imls(  # passed to classical_damage
+                new, discretization, steps_per_interval)
+        for i, ls in enumerate(limit_states):
+            data = self.array[i]
+            if self.format == 'discrete':
+                if add_zero:
+                    new.append(FragilityFunctionDiscrete(
+                        ls, [self.nodamage] + self.imls,
+                        numpy.concatenate([[0.], data]),
+                        self.nodamage))
+                else:
+                    new.append(FragilityFunctionDiscrete(
+                        ls, self.imls, data, self.nodamage))
+            else:  # continuous
+                new.append(FragilityFunctionContinuous(
+                    ls, data['mean'], data['stddev']))
+        return new
 
     def __toh5__(self):
         return self.array, {k: v for k, v in vars(self).items()
@@ -680,30 +713,10 @@ class FragilityModel(dict):
             configuration parameter
         """
         newfm = copy.copy(self)
-        for key, ff in self.items():
-            newfm[key] = new = copy.copy(ff)
-            # TODO: this is complicated: check with Anirudh
-            add_zero = (ff.format == 'discrete' and
-                        ff.nodamage is not None and ff.nodamage < ff.imls[0])
-            new.imls = build_imls(new, continuous_fragility_discretization)
-            if steps_per_interval > 1:
-                new.interp_imls = build_imls(  # passed to classical_damage
-                    new, continuous_fragility_discretization,
-                    steps_per_interval)
-            for i, ls in enumerate(self.limitStates):
-                data = ff.array[i]
-                if ff.format == 'discrete':
-                    if add_zero:
-                        new.append(FragilityFunctionDiscrete(
-                            ls, [ff.nodamage] + ff.imls,
-                            numpy.concatenate([[0.], data]),
-                            ff.nodamage))
-                    else:
-                        new.append(FragilityFunctionDiscrete(
-                            ls, ff.imls, data, ff.nodamage))
-                else:  # continuous
-                    new.append(FragilityFunctionContinuous(
-                        ls, data['mean'], data['stddev']))
+        for key, ffl in self.items():
+            newfm[key] = ffl.build(self.limitStates,
+                                   continuous_fragility_discretization,
+                                   steps_per_interval)
         return newfm
 
 

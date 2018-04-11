@@ -1,23 +1,22 @@
-#  -*- coding: utf-8 -*-
-#  vim: tabstop=4 shiftwidth=4 softtabstop=4
-
-#  Copyright (c) 2017, GEM Foundation
-
-#  OpenQuake is free software: you can redistribute it and/or modify it
-#  under the terms of the GNU Affero General Public License as published
-#  by the Free Software Foundation, either version 3 of the License, or
-#  (at your option) any later version.
-
-#  OpenQuake is distributed in the hope that it will be useful,
-#  but WITHOUT ANY WARRANTY; without even the implied warranty of
-#  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-#  GNU Affero General Public License for more details.
-
-#  You should have received a copy of the GNU Affero General Public License
-#  along with OpenQuake.  If not, see <http://www.gnu.org/licenses/>.
+# -*- coding: utf-8 -*-
+# vim: tabstop=4 shiftwidth=4 softtabstop=4
+#
+# Copyright (C) 2017-2018 GEM Foundation
+#
+# OpenQuake is free software: you can redistribute it and/or modify it
+# under the terms of the GNU Affero General Public License as published
+# by the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# OpenQuake is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU Affero General Public License for more details.
+#
+# You should have received a copy of the GNU Affero General Public License
+# along with OpenQuake.  If not, see <http://www.gnu.org/licenses/>.
 import unittest
 import numpy
-from openquake.hazardlib.source import split_source
 from openquake.hazardlib.sourcewriter import obj_to_node
 from openquake.hazardlib.mfd.multi_mfd import MultiMFD
 from openquake.hazardlib.source.multi import MultiPointSource
@@ -44,10 +43,8 @@ class MultiPointTestCase(unittest.TestCase):
                                'Active Shallow Crust',
                                mmfd, 2.0, PeerMSR(), 1.0,
                                tom, 10, 20, npd, hd, mesh)
-        mps.src_group_id = 1
-
         # test the splitting
-        splits = list(split_source(mps))
+        splits = list(mps)
         self.assertEqual(len(splits), 2)
         for split in splits:
             self.assertEqual(split.src_group_id, mps.src_group_id)

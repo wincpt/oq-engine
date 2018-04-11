@@ -1,5 +1,5 @@
 # The Hazard Library
-# Copyright (C) 2012-2017 GEM Foundation
+# Copyright (C) 2012-2018 GEM Foundation
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as
@@ -135,7 +135,6 @@ class SiteCollectionCreationTestCase(unittest.TestCase):
         for arr in (cll.vs30measured, cll.backarc):
             self.assertIsInstance(arr, numpy.ndarray)
             self.assertEqual(arr.dtype, bool)
-        self.assertEqual(cll.array.flags.writeable, False)
         self.assertEqual(len(cll), 2)
 
         # test split_in_tiles
