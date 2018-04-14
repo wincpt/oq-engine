@@ -117,8 +117,8 @@ def ucerf_classical(rupset_idx, ucerf_source, src_filter, gsims, monitor):
     imtls = DictArray(imtls)
     ctx_mon = monitor('make_contexts', measuremem=False)
     poe_mon = monitor('get_poes', measuremem=False)
-    pmap = cmaker.poe_map(ucerf_source, s_sites, imtls,
-                          truncation_level, ctx_mon, poe_mon)
+    pmap = cmaker.poe_map(ucerf_source, s_sites, dict(imtls=imtls,
+                          truncation_level=truncation_level), ctx_mon, poe_mon)
     nsites = len(s_sites)
     acc = AccumDict({grp_id: pmap})
     acc.calc_times = {
