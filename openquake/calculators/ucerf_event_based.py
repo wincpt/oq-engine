@@ -409,7 +409,7 @@ class UCERFSource(object):
         self.tectonic_region_type = trt
         self.num_ruptures = 0  # not set yet
 
-    def count_ruptures(self):
+    def count_ruptures(self, param={}):
         """
         The length of the rupture array if the branch_id is set, else 0
         """

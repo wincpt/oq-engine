@@ -182,6 +182,8 @@ class PointSource(ParametricSeismicSource):
             (``rate_scaling_factor = 1``).
         """
         assert 0 < rate_scaling_factor
+        minfloat = param.get('min_mag_floating', 0)
+        minspin = param.get('min_mag_spinning', 0)
         for mag, mag_occ_rate in self.get_annual_occurrence_rates():
             for np_prob, np in self.nodal_plane_distribution.data:
                 for hc_prob, hc_depth in self.hypocenter_distribution.data:
@@ -195,8 +197,11 @@ class PointSource(ParametricSeismicSource):
                     yield ParametricProbabilisticRupture(
                         mag, np.rake, self.tectonic_region_type, hypocenter,
                         surface, type(self),
-                        occurrence_rate, self.temporal_occurrence_model
-                    )
+                        occurrence_rate, self.temporal_occurrence_model)
+                    if mag < minfloat:  # do not float the rupture
+                        break
+                if mag < minspin:  # do not spin the rupture
+                    break
 
     def count_ruptures(self, param={}):
         """

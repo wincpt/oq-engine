@@ -112,18 +112,24 @@ class AreaSource(ParametricSeismicSource):
         # epicenter location (first point of the polygon's mesh) but different
         # magnitudes, nodal planes, hypocenters' depths and occurrence rates
         ref_ruptures = []
-        for (mag, mag_occ_rate) in self.get_annual_occurrence_rates():
-            for (np_prob, np) in self.nodal_plane_distribution.data:
-                for (hc_prob, hc_depth) in self.hypocenter_distribution.data:
+        minfloat = param.get('min_mag_floating', 0)
+        minspin = param.get('min_mag_spinning', 0)
+        for mag, mag_occ_rate in self.get_annual_occurrence_rates():
+            for np_prob, np in self.nodal_plane_distribution.data:
+                for hc_prob, hc_depth in self.hypocenter_distribution.data:
                     hypocenter = geo.Point(latitude=epicenter0.latitude,
                                            longitude=epicenter0.longitude,
                                            depth=hc_depth)
-                    occurrence_rate = (mag_occ_rate
-                                       * float(np_prob) * float(hc_prob))
+                    occurrence_rate = (
+                        mag_occ_rate * float(np_prob) * float(hc_prob))
                     occurrence_rate *= rate_scaling_factor
                     surface = self._get_rupture_surface(mag, np, hypocenter)
                     ref_ruptures.append((mag, np.rake, hc_depth,
                                          surface, occurrence_rate))
+                    if mag < minfloat:  # do not float the rupture
+                        break
+                if mag < minspin:  # do not spin the rupture
+                    break
 
         # for each of the epicenter positions generate as many ruptures
         # as we generated "reference" ones: new ruptures differ only
@@ -141,7 +147,7 @@ class AreaSource(ParametricSeismicSource):
                     self.temporal_occurrence_model)
                 yield rupture
 
-    def count_ruptures(self):
+    def count_ruptures(self, param={}):
         """
         See
         :meth:`openquake.hazardlib.source.base.BaseSeismicSource.count_ruptures`

@@ -244,7 +244,7 @@ class ComplexFaultSource(ParametricSeismicSource):
                     surface, type(self),
                     occurrence_rate, self.temporal_occurrence_model)
 
-    def count_ruptures(self):
+    def count_ruptures(self, param={}):
         """
         See :meth:
         `openquake.hazardlib.source.base.BaseSeismicSource.count_ruptures`.

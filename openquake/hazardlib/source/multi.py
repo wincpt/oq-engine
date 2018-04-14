@@ -80,7 +80,7 @@ class MultiPointSource(ParametricSeismicSource):
             for rupture in ps.iter_ruptures(param):
                 yield rupture
 
-    def count_ruptures(self):
+    def count_ruptures(self, param={}):
         """
         See
         :meth:`openquake.hazardlib.source.base.BaseSeismicSource.count_ruptures`

@@ -81,7 +81,7 @@ class NonParametricSeismicSource(BaseSeismicSource):
             src.src_group_id = self.src_group_id
             yield src
 
-    def count_ruptures(self):
+    def count_ruptures(self, param={}):
         """
         See :meth:
         `openquake.hazardlib.source.base.BaseSeismicSource.count_ruptures`.
