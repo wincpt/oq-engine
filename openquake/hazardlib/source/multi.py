@@ -80,15 +80,7 @@ class MultiPointSource(ParametricSeismicSource):
             for rupture in ps.iter_ruptures(param):
                 yield rupture
 
-    def count_ruptures(self, param={}):
-        """
-        See
-        :meth:`openquake.hazardlib.source.base.BaseSeismicSource.count_ruptures`
-        for description of parameters and return value.
-        """
-        return (len(self.get_annual_occurrence_rates()) *
-                len(self.nodal_plane_distribution.data) *
-                len(self.hypocenter_distribution.data))
+    count_ruptures = PointSource.count_ruptures
 
     def filter_sites_by_distance_to_source(self, integration_distance, sites):
         """Filter on the bounding box"""

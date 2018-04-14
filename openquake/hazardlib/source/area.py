@@ -153,11 +153,8 @@ class AreaSource(ParametricSeismicSource):
         :meth:`openquake.hazardlib.source.base.BaseSeismicSource.count_ruptures`
         for description of parameters and return value.
         """
-        polygon_mesh = self.polygon.discretize(self.area_discretization)
-        return (len(polygon_mesh) *
-                len(self.get_annual_occurrence_rates()) *
-                len(self.nodal_plane_distribution.data) *
-                len(self.hypocenter_distribution.data))
+        nr = PointSource.count_ruptures(self, param)
+        return nr * len(self.polygon.discretize(self.area_discretization))
 
     _get_rupture_dimensions = PointSource.__dict__['_get_rupture_dimensions']
     _get_max_rupture_projection_radius = PointSource.__dict__[

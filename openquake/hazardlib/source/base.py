@@ -278,7 +278,7 @@ class ParametricSeismicSource(with_metaclass(abc.ABCMeta, BaseSeismicSource)):
             A list of two-item tuples -- magnitudes and occurrence rates.
         """
         return [(mag, occ_rate)
-                for (mag, occ_rate) in self.mfd.get_annual_occurrence_rates()
+                for mag, occ_rate in self.mfd.get_annual_occurrence_rates()
                 if min_rate is None or occ_rate > min_rate]
 
     def get_min_max_mag(self):

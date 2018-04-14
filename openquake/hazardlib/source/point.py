@@ -208,9 +208,16 @@ class PointSource(ParametricSeismicSource):
         See :meth:
         `openquake.hazardlib.source.base.BaseSeismicSource.count_ruptures`.
         """
-        return (len(self.get_annual_occurrence_rates()) *
-                len(self.nodal_plane_distribution.data) *
-                len(self.hypocenter_distribution.data))
+        minfloat = param.get('min_mag_floating', 0)
+        minspin = param.get('min_mag_spinning', 0)
+        nr = 0
+        F = len(self.hypocenter_distribution.data)
+        S = len(self.nodal_plane_distribution.data)
+        for mag, mag_occ_rate in self.get_annual_occurrence_rates():
+            floatfactor = 1 if mag < minfloat else F
+            spinfactor = 1 if mag < minspin else S
+            nr += floatfactor * spinfactor
+        return nr
 
     def _get_rupture_dimensions(self, mag, nodal_plane):
         """

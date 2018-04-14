@@ -163,7 +163,10 @@ class PSHACalculator(base.HazardCalculator):
             tiles = self.sitecol.split_in_tiles(num_tiles)
         else:
             tiles = [self.sitecol]
-        param = dict(truncation_level=oq.truncation_level, imtls=oq.imtls)
+        param = dict(imtls=oq.imtls,
+                     truncation_level=oq.truncation_level,
+                     min_mag_floating=oq.min_mag_floating,
+                     min_mag_spinning=oq.min_mag_spinning)
         minweight = source.MINWEIGHT * math.sqrt(len(self.sitecol))
         totweight = 0
         for tile_i, tile in enumerate(tiles, 1):

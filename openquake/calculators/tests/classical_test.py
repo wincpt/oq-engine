@@ -293,6 +293,7 @@ hazard_uhs-mean.csv
 
     @attr('qa', 'hazard', 'classical')
     def test_case_17(self):  # oversampling
+        # this is also a case with spinning factor
         self.assert_curves_ok(
             ['hazard_curve-smltp_b1-gsimltp_b1-ltr_0.csv',
              'hazard_curve-smltp_b2-gsimltp_b1-ltr_1.csv',
@@ -303,6 +304,7 @@ hazard_uhs-mean.csv
 
     @attr('qa', 'hazard', 'classical')
     def test_case_18(self):  # GMPEtable
+        # this is also a case with floating factor
         self.assert_curves_ok(
             ['hazard_curve-mean_PGA.csv',
              'hazard_curve-mean_SA(0.2).csv',
