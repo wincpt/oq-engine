@@ -151,9 +151,7 @@ def sample_ruptures(group, src_filter, gsims, param, monitor=Monitor()):
     for src, s_sites in src_filter(group):
         t0 = time.time()
         num_ruptures += src.num_ruptures
-        num_occ_by_rup = _sample_ruptures(
-            src, prob[src], param['ses_per_logic_tree_path'], group.samples,
-            param['seed'])
+        num_occ_by_rup = _sample_ruptures(src, prob[src], param, group.samples)
         # NB: the number of occurrences is very low, << 1, so it is
         # more efficient to filter only the ruptures that occur, i.e.
         # to call sample_ruptures *before* the filtering
@@ -169,22 +167,24 @@ def sample_ruptures(group, src_filter, gsims, param, monitor=Monitor()):
     return dic
 
 
-def _sample_ruptures(src, prob, num_ses, num_samples, seed):
+def _sample_ruptures(src, prob, param, num_samples):
     """
     Sample the ruptures contained in the given source.
 
     :param src: a hazardlib source object
     :param prob: a probability (1 for indep sources, < 1 for mutex sources)
-    :param num_ses: the number of Stochastic Event Sets to generate
+    :param param: ses_per_logic_tree_path, seed and iter_ruptures parameters
     :param num_samples: how many samples for the given source
     :param seed: master seed from the job.ini file
     :returns: a dictionary of dictionaries rupture -> {ses_id: num_occurrences}
     """
+    num_ses = param['ses_per_logic_tree_path']
+    seed = param['seed']
     # the dictionary `num_occ_by_rup` contains a dictionary
     # ses_id -> num_occurrences for each occurring rupture
     num_occ_by_rup = collections.defaultdict(AccumDict)
     # generating ruptures for the given source
-    for rup_no, rup in enumerate(src.iter_ruptures()):
+    for rup_no, rup in enumerate(src.iter_ruptures(param)):
         rup.seed = src.serial[rup_no] + seed
         numpy.random.seed(rup.seed)
         for sam_idx in range(num_samples):
