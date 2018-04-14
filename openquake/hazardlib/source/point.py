@@ -147,7 +147,7 @@ class PointSource(ParametricSeismicSource):
         radius += integration_distance
         return sites.filter(self.location.closer_than(sites.mesh, radius))
 
-    def iter_ruptures(self):
+    def iter_ruptures(self, param={}):
         """
         See :meth:
         `openquake.hazardlib.source.base.BaseSeismicSource.iter_ruptures`.
@@ -156,10 +156,10 @@ class PointSource(ParametricSeismicSource):
         and hypocenter depth.
         """
         return self._iter_ruptures_at_location(self.temporal_occurrence_model,
-                                               self.location)
+                                               self.location, 1, param)
 
     def _iter_ruptures_at_location(self, temporal_occurrence_model, location,
-                                   rate_scaling_factor=1):
+                                   rate_scaling_factor=1, param={}):
         """
         The common part of :meth:
         `openquake.hazardlib.source.point.Point.iter_ruptures`
@@ -182,9 +182,9 @@ class PointSource(ParametricSeismicSource):
             (``rate_scaling_factor = 1``).
         """
         assert 0 < rate_scaling_factor
-        for (mag, mag_occ_rate) in self.get_annual_occurrence_rates():
-            for (np_prob, np) in self.nodal_plane_distribution.data:
-                for (hc_prob, hc_depth) in self.hypocenter_distribution.data:
+        for mag, mag_occ_rate in self.get_annual_occurrence_rates():
+            for np_prob, np in self.nodal_plane_distribution.data:
+                for hc_prob, hc_depth in self.hypocenter_distribution.data:
                     hypocenter = Point(latitude=location.latitude,
                                        longitude=location.longitude,
                                        depth=hc_depth)
@@ -198,7 +198,7 @@ class PointSource(ParametricSeismicSource):
                         occurrence_rate, self.temporal_occurrence_model
                     )
 
-    def count_ruptures(self):
+    def count_ruptures(self, param={}):
         """
         See :meth:
         `openquake.hazardlib.source.base.BaseSeismicSource.count_ruptures`.

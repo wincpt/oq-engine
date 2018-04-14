@@ -39,11 +39,11 @@ class StochasticEventSetTestCase(unittest.TestCase):
             self.source_id = source_id
             self.ruptures = ruptures
 
-        def iter_ruptures(self):
+        def iter_ruptures(self, param={}):
             return iter(self.ruptures)
 
     class FailSource(FakeSource):
-        def iter_ruptures(self):
+        def iter_ruptures(self, param={}):
             raise ValueError('Something bad happened')
 
     def setUp(self):

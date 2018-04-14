@@ -53,11 +53,13 @@ class NonParametricSeismicSource(BaseSeismicSource):
             __init__(source_id, name, tectonic_region_type)
         self.data = data
 
-    def iter_ruptures(self):
+    def iter_ruptures(self, param={}):
         """
         Get a generator object that yields probabilistic ruptures the source
         consists of.
 
+        :param param:
+            Dictionary of read only parameters (default empty)
         :returns:
             Generator of instances of :class:
             `~openquake.hazardlib.source.rupture.NonParametricProbabilisticRupture`.

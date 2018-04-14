@@ -72,12 +72,12 @@ class MultiPointSource(ParametricSeismicSource):
     def __len__(self):
         return len(self.mfd)
 
-    def iter_ruptures(self):
+    def iter_ruptures(self, param={}):
         """
         Yield the ruptures of the underlying point sources
         """
         for ps in self:
-            for rupture in ps.iter_ruptures():
+            for rupture in ps.iter_ruptures(param):
                 yield rupture
 
     def count_ruptures(self):

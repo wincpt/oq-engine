@@ -90,7 +90,6 @@ def classical(group, src_filter, gsims, param, monitor=Monitor()):
     maxdist = src_filter.integration_distance
     with GroundShakingIntensityModel.forbid_instantiation():
         imtls = param['imtls']
-        trunclevel = param.get('truncation_level')
         cmaker = ContextMaker(gsims, maxdist)
         ctx_mon = monitor('make_contexts', measuremem=False)
         poe_mon = monitor('get_poes', measuremem=False)
@@ -103,7 +102,7 @@ def classical(group, src_filter, gsims, param, monitor=Monitor()):
             t0 = time.time()
             indep = group.rup_interdep == 'indep' if mutex_weight else True
             poemap = cmaker.poe_map(
-                src, s_sites, imtls, trunclevel, ctx_mon, poe_mon, indep)
+                src, s_sites, param, ctx_mon, poe_mon, indep)
             if mutex_weight:  # mutex sources
                 weight = mutex_weight[src.source_id]
                 for sid in poemap:

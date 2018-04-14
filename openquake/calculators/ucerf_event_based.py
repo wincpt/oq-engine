@@ -601,7 +601,7 @@ class UCERFSource(object):
             rupture_occ.extend(background_n_occ)
         return ruptures, rupture_occ
 
-    def iter_ruptures(self):
+    def iter_ruptures(self, param={}):
         """
         Yield ruptures for the current set of indices (.rupset_idx)
         """

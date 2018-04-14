@@ -204,7 +204,7 @@ class ComplexFaultSource(ParametricSeismicSource):
         else:
             return polygon
 
-    def iter_ruptures(self):
+    def iter_ruptures(self, param={}):
         """
         See :meth:
         `openquake.hazardlib.source.base.BaseSeismicSource.iter_ruptures`.

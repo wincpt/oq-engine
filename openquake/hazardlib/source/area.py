@@ -82,7 +82,7 @@ class AreaSource(ParametricSeismicSource):
         max_rup_radius = self._get_max_rupture_projection_radius()
         return self.polygon.dilate(max_rup_radius + dilation)
 
-    def iter_ruptures(self):
+    def iter_ruptures(self, param={}):
         """
         See :meth:`openquake.hazardlib.source.base.BaseSeismicSource.iter_ruptures`
         for description of parameters and return value.

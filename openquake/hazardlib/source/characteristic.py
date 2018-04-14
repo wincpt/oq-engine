@@ -97,7 +97,7 @@ class CharacteristicFaultSource(ParametricSeismicSource):
         dpoly = poly.dilate(dilation)
         return dpoly
 
-    def iter_ruptures(self):
+    def iter_ruptures(self, param={}):
         """
         See :meth:
         `openquake.hazardlib.source.base.BaseSeismicSource.iter_ruptures`.

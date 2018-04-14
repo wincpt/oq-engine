@@ -80,11 +80,13 @@ class BaseSeismicSource(with_metaclass(abc.ABCMeta)):
         self.id = None  # set by the engine
 
     @abc.abstractmethod
-    def iter_ruptures(self):
+    def iter_ruptures(self, param={}):
         """
         Get a generator object that yields probabilistic ruptures the source
         consists of.
 
+        :param param:
+            Dictionary of read only parameters (default empty)
         :returns:
             Generator of instances of sublclass of :class:
             `~openquake.hazardlib.source.rupture.BaseProbabilisticRupture`.

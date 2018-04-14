@@ -271,15 +271,16 @@ class ContextMaker(object):
         dctx = self.make_distances_context(sites, rupture, {'rjb': distances})
         return (sctx, rctx, dctx)
 
-    def filter_ruptures(self, src, sites):
+    def filter_ruptures(self, src, sites, param):
         """
         :param src: a source object, already filtered and split
         :param sites: a filtered SiteCollection
+        :param param: dictionary of read only parameters (default empty)
         :return: a list of filtered ruptures with context attributes
         """
         ruptures = []
-        weight = 1. / (src.num_ruptures or src.count_ruptures())
-        for rup in src.iter_ruptures():
+        weight = 1. / (src.num_ruptures or src.count_ruptures(param))
+        for rup in src.iter_ruptures(param):
             rup.weight = weight
             try:
                 rup.sctx, rup.rctx, rup.dctx = self.make_contexts(sites, rup)
@@ -288,22 +289,22 @@ class ContextMaker(object):
             ruptures.append(rup)
         return ruptures
 
-    def make_pmap(self, ruptures, imtls, trunclevel, rup_indep):
+    def make_pmap(self, ruptures, param, rup_indep):
         """
         :param src: a source object
         :param ruptures: a list of "dressed" ruptures
-        :param imtls: intensity measure and levels
-        :param trunclevel: truncation level
+        :param param: intensity measure and levels and truncation level
         :param rup_indep: True if the ruptures are independent
         :returns: a ProbabilityMap instance
         """
         sids = set()
         for rup in ruptures:
             sids.update(rup.sctx.sids)
+        imtls = param['imtls']
         pmap = ProbabilityMap.build(
             len(imtls.array), len(self.gsims), sids, initvalue=rup_indep)
         for rup in ruptures:
-            pnes = self._make_pnes(rup, imtls, trunclevel)
+            pnes = self._make_pnes(rup, imtls, param['truncation_level'])
             for sid, pne in zip(rup.sctx.sids, pnes):
                 if rup_indep:
                     pmap[sid].array *= pne
@@ -313,25 +314,23 @@ class ContextMaker(object):
         tildemap.eff_ruptures = len(ruptures)
         return tildemap
 
-    def poe_map(self, src, sites, imtls, trunclevel, ctx_mon, poe_mon,
-                rup_indep=True):
+    def poe_map(self, src, sites, param, ctx_mon, poe_mon, rup_indep=True):
         """
         :param src: a source object
         :param sites: a filtered SiteCollection
-        :param imtls: intensity measure and levels
-        :param trunclevel: truncation level
+        :param param: dictionary of read only parameters (default empty)
         :param ctx_mon: a Monitor instance for make_context
         :param poe_mon: a Monitor instance for get_poes
         :param rup_indep: True if the ruptures are independent
         :returns: a ProbabilityMap instance
         """
         with ctx_mon:
-            ruptures = self.filter_ruptures(src, sites)
+            ruptures = self.filter_ruptures(src, sites, param)
         if not ruptures:
             return {}
         try:
             with poe_mon:
-                pmap = self.make_pmap(ruptures, imtls, trunclevel, rup_indep)
+                pmap = self.make_pmap(ruptures, param, rup_indep)
         except Exception as err:
             etype, err, tb = sys.exc_info()
             msg = '%s (source id=%s)' % (str(err), src.source_id)
