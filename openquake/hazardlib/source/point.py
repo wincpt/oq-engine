@@ -182,8 +182,8 @@ class PointSource(ParametricSeismicSource):
             (``rate_scaling_factor = 1``).
         """
         assert 0 < rate_scaling_factor
-        minfloat = param.get('min_mag_floating', 0)
-        minspin = param.get('min_mag_spinning', 0)
+        minfloat = param.get('floating_magnitude', 0)
+        minspin = param.get('spinning_magnitude', 0)
         for mag, mag_occ_rate in self.get_annual_occurrence_rates():
             for np_prob, np in self.nodal_plane_distribution.data:
                 for hc_prob, hc_depth in self.hypocenter_distribution.data:
@@ -208,8 +208,8 @@ class PointSource(ParametricSeismicSource):
         See :meth:
         `openquake.hazardlib.source.base.BaseSeismicSource.count_ruptures`.
         """
-        minfloat = param.get('min_mag_floating', 0)
-        minspin = param.get('min_mag_spinning', 0)
+        minfloat = param.get('floating_magnitude', 0)
+        minspin = param.get('spinning_magnitude', 0)
         nr = 0
         F = len(self.hypocenter_distribution.data)
         S = len(self.nodal_plane_distribution.data)

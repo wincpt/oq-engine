@@ -112,8 +112,8 @@ class AreaSource(ParametricSeismicSource):
         # epicenter location (first point of the polygon's mesh) but different
         # magnitudes, nodal planes, hypocenters' depths and occurrence rates
         ref_ruptures = []
-        minfloat = param.get('min_mag_floating', 0)
-        minspin = param.get('min_mag_spinning', 0)
+        minfloat = param.get('floating_magnitude', 0)
+        minspin = param.get('spinning_magnitude', 0)
         for mag, mag_occ_rate in self.get_annual_occurrence_rates():
             for np_prob, np in self.nodal_plane_distribution.data:
                 for hc_prob, hc_depth in self.hypocenter_distribution.data:

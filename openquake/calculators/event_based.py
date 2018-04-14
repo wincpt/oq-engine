@@ -170,8 +170,8 @@ class EventBasedRuptureCalculator(base.HazardCalculator):
             imtls=oq.imtls, seed=oq.ses_seed,
             maximum_distance=oq.maximum_distance,
             ses_per_logic_tree_path=oq.ses_per_logic_tree_path,
-            min_mag_floating=oq.min_mag_floating,
-            min_mag_spinning=oq.min_mag_spinning)
+            floating_magnitude=oq.floating_magnitude,
+            spinning_magnitude=oq.spinning_magnitude)
 
         num_tasks = 0
         num_sources = 0

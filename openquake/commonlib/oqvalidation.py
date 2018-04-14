@@ -95,8 +95,8 @@ class OqParam(valid.ParamSet):
     max_loss_curves = valid.Param(valid.boolean, False)
     mean_loss_curves = valid.Param(valid.boolean, True)
     minimum_intensity = valid.Param(valid.floatdict, {})  # IMT -> minIML
-    min_mag_floating = valid.Param(valid.magnitude, 0)
-    min_mag_spinning = valid.Param(valid.magnitude, 0)
+    floating_magnitude = valid.Param(valid.magnitude, 0)
+    spinning_magnitude = valid.Param(valid.magnitude, 0)
     number_of_ground_motion_fields = valid.Param(valid.positiveint)
     number_of_logic_tree_samples = valid.Param(valid.positiveint, 0)
     num_epsilon_bins = valid.Param(valid.positiveint)
