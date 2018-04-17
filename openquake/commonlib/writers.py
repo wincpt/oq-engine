@@ -106,7 +106,6 @@ htranslator = HeaderTranslator(  # longname -> shortname
     'rup_id:uint32 rup_id',
     'event_id:uint64 event_id',
     'event_set:uint32 event_set',
-    'eid:uint32 eid',
     'eid-(\d+):float32 eid-(\d+)',
     'year:uint32 year',
     'return_period:uint32 return_period',
