@@ -30,6 +30,12 @@ from openquake.baselib.python3compat import encode
 FIVEDIGITS = '%.5E'
 
 
+def normalize(rx, mo):
+    if mo.groups():
+        rx = re.sub(r'\(.+\)', mo.group(1), rx)
+    return rx.replace('\\', '')[:-1]  # strip the final $
+
+
 class HeaderTranslator(object):
     r"""
     An utility to convert the headers in CSV files. When reading,
@@ -38,104 +44,101 @@ class HeaderTranslator(object):
     into column names with the method .write. The usage is
 
     >>> htranslator = HeaderTranslator(
-    ...     '(asset_ref):\|S100',
-    ...     '(eid):uint32',
-    ...     '(taxonomy):object')
-    >>> htranslator.write('asset_ref:|S100 value:5'.split())
-    ['asset_ref', 'value:5']
-    >>> htranslator.read('asset_ref value:5'.split())
-    ['asset_ref:|S100', 'value:5']
+    ...     'asset_ref:\|S100 asset_ref',
+    ...     'eid:uint32 eid',
+    ...     'poe-([\d\.]+):float32 poe-([\d\.]+)',
+    ...     'taxonomy:object taxonomy')
+    >>> htranslator.write('asset_ref:|S100 poe-0.3:float32 value:5'.split())
+    ['asset_ref', 'poe-0.3', 'value:5']
+    >>> htranslator.read('asset_ref poe-0.3 value:5'.split())
+    ['asset_ref:|S100', 'poe-0.3:float32', 'value:5']
     """
-    def __init__(self, *regexps):
-        self.suffix = []
-        short_regexps = []
-        for regex in regexps:
-            prefix, suffix = regex.split(')')
-            short_regexps.append(prefix + ')$')
-            self.suffix.append(suffix)
-        self.short_regex = '|'.join(short_regexps)
-        self.long_regex = '|'.join(regexps)
+    def __init__(self, *args):
+        self.long2short = {}
+        for arg in args:
+            longname, shortname = arg.split()
+            self.long2short[longname + '$'] = shortname + '$'
 
     def read(self, names):
         """
-        Convert names into descriptions
+        Convert short names into long names
         """
         descrs = []
         for name in names:
-            mo = re.match(self.short_regex, name)
-            if mo:
-                idx = mo.lastindex  # matching group index, starting from 1
-                suffix = self.suffix[idx - 1].replace(r':\|', ':|')
-                descrs.append(mo.group(mo.lastindex) + suffix +
-                              name[mo.end():])
+            for longname, shortname in self.long2short.items():
+                mo = re.match(shortname, name)
+                if mo:
+                    descrs.append(normalize(longname, mo))
+                    break
             else:
                 descrs.append(name)
         return descrs
 
     def write(self, descrs):
         """
-        Convert descriptions into names
+        Convert long names into short names
         """
-        # example: '(poe-[\d\.]+):float32' -> 'poe-[\d\.]+'
         names = []
         for descr in descrs:
-            mo = re.match(self.long_regex, descr)
-            if mo:
-                names.append(mo.group(mo.lastindex) + descr[mo.end():])
+            for longname, shortname in self.long2short.items():
+                mo = re.match(longname, descr)
+                if mo:
+                    names.append(normalize(shortname, mo))
+                    break
             else:
                 names.append(descr)
         return names
 
-htranslator = HeaderTranslator(
-    '(rlzi):uint16',
-    '(sid):uint32',
-    '(eid):uint64',
-    '(imti):uint8',
-    '(gmv_.+):float32',
-    '(aid):uint32',
-    '(annual_loss_orig):float32',
-    '(annual_loss_retro):float32',
-    '(bcr):float32',
-    '(boundary):object',
-    '(tectonic_region_type):object',
-    '(asset_ref):\|S100',
-    '(rup_id):uint32',
-    '(event_id):uint64',
-    '(event_set):uint32',
-    '(eid):uint32',
-    '(eid-\d+):float32',
-    '(year):uint32',
-    '(return_period):uint32',
-    '(site_id):uint32',
-    '(taxonomy):\|S100',
-    '(tag):\|S100',
-    '(multiplicity):uint16',
-    '(magnitude):float32',
-    '(centroid_lon):float32',
-    '(centroid_lat):float32',
-    '(centroid_depth):float32',
-    '(numsites):uint32',
-    '(losses):float32',
-    '(poes):float32',
-    '(avg):float32',
-    '(poe-[\d\.]+):float32',
-    '(lon):float32',
-    '(lat):float32',
-    '(depth):float32',
-    '(structural.*):float32',
-    '(nonstructural.*):float32',
-    '(business_interruption.*):float32',
-    '(contents.*):float32',
-    '(occupants):float32',
-    '(occupants~.+):float32',
-    '(occupants_ins):float32',
-    '(no_damage):float32',
-    '(slight):float32',
-    '(moderate):float32',
-    '(extensive):float32',
-    '(extreme):float32',
-    '(complete):float32',
-    '(\d+):float32',  # realization column, used in the GMF scenario exporter
+htranslator = HeaderTranslator(  # longname -> shortname
+    'rlzi:uint16 rlzi',
+    'sid:uint32 sid',
+    'eid:uint64 eid',
+    'imti:uint8 imti',
+    'gmv_(.+):float32 gmv_(.+)',
+    'aid:uint32 aid',
+    'annual_loss_orig:float32 annual_loss_orig',
+    'annual_loss_retro:float32 annual_loss_retro',
+    'bcr:float32 bcr',
+    'boundary:object boundary',
+    'tectonic_region_type:object tectonic_region_type',
+    'asset_ref:\|S100 asset_ref',
+    'rup_id:uint32 rup_id',
+    'event_id:uint64 event_id',
+    'event_set:uint32 event_set',
+    'eid:uint32 eid',
+    'eid-(\d+):float32 eid-(\d+)',
+    'year:uint32 year',
+    'return_period:uint32 return_period',
+    'site_id:uint32 site_id',
+    '(taxonomy):\|S100 taxonomy',
+    'tag:\|S100 tag',
+    'multiplicity:uint16 multiplicity',
+    'magnitude:float32 magnitude',
+    'centroid_lon:float32 centroid_lon',
+    'centroid_lat:float32 centroid_lat',
+    'centroid_depth:float32 centroid_depth',
+    'numsites:uint32 numsites',
+    'losses:float32 losses',
+    'poes:float32 poes',
+    'avg:float32 avg',
+    'poe-([\d\.]+):float32 poe-([\d\.]+)',
+    'lon:float32 lon',
+    'lat:float32 lat',
+    'depth:float32 depth',
+    'structural(.*):float32 structural(.*)',
+    'nonstructural(.*):float32 nonstructural(.*)',
+    'business_interruption(.*):float32 business_interruption(.*)',
+    'contents(.*):float32 contents(.*)',
+    'occupants:float32 occupants',
+    'occupants~(.+):float32 occupants~(.+)',
+    'occupants_ins:float32 occupants_ins',
+    'no_damage:float32 no_damage',
+    'slight:float32 slight',
+    'moderate:float32 moderate',
+    'extensive:float32 extensive',
+    'extreme:float32 extreme',
+    'complete:float32 complete',
+    '(\d+):float32 (\d+)',  # realization column for the GMF scenario exporter
 )
 
 
@@ -382,7 +385,7 @@ def read_composite_array(fname, sep=','):
     Convert a CSV file with header into an ArrayWrapper object.
 
     >>> from openquake.baselib.general import writetmp
-    >>> fname = writetmp('PGA:3,PGV:2,avg:1\n'
+    >>> fname = writetmp('PGA:3,PGV:2,avg:float32:1\n'
     ...                  '.1 .2 .3,.4 .5,.6\n')
     >>> print(read_composite_array(fname).array)  # array of shape (1,)
     [([0.1, 0.2, 0.3], [0.4, 0.5], [0.6])]
