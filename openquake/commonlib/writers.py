@@ -30,7 +30,8 @@ from openquake.baselib.python3compat import encode
 FIVEDIGITS = '%.5E'
 
 
-def normalize(rx, mo):
+def _normalize(rx, mo):
+    # for instance "poe-([\d\.]+):float32$" -> "poe-0.3" is mo.group(1)="0.3"
     if mo.groups():
         rx = re.sub(r'\(.+\)', mo.group(1), rx)
     return rx.replace('\\', '')[:-1]  # strip the final $
@@ -68,7 +69,7 @@ class HeaderTranslator(object):
             for longname, shortname in self.long2short.items():
                 mo = re.match(shortname, name)
                 if mo:
-                    descrs.append(normalize(longname, mo))
+                    descrs.append(_normalize(longname, mo))
                     break
             else:
                 descrs.append(name)
@@ -83,7 +84,7 @@ class HeaderTranslator(object):
             for longname, shortname in self.long2short.items():
                 mo = re.match(longname, descr)
                 if mo:
-                    names.append(normalize(shortname, mo))
+                    names.append(_normalize(shortname, mo))
                     break
             else:
                 names.append(descr)
