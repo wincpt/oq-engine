@@ -24,13 +24,13 @@ import zlib
 import shutil
 import zipfile
 import logging
-import operator
 import tempfile
+import configparser
 import collections
 import numpy
 
 from openquake.baselib.general import AccumDict, DictArray, deprecated
-from openquake.baselib.python3compat import configparser, decode
+from openquake.baselib.python3compat import decode
 from openquake.baselib.node import Node
 from openquake.hazardlib import (
     calc, geo, site, imt, valid, sourceconverter, nrml, InvalidFile)
@@ -258,13 +258,10 @@ def get_mesh(oqparam):
         else:
             raise NotImplementedError('Reading from %s' % fname)
         return mesh
-    elif oqparam.region:
-        # close the linear polygon ring by appending the first
-        # point to the end
-        firstpoint = geo.Point(*oqparam.region[0])
-        points = [geo.Point(*xy) for xy in oqparam.region] + [firstpoint]
+    elif oqparam.region and oqparam.region_grid_spacing:
+        poly = geo.Polygon.from_wkt(oqparam.region)
         try:
-            mesh = geo.Polygon(points).discretize(oqparam.region_grid_spacing)
+            mesh = poly.discretize(oqparam.region_grid_spacing)
             return geo.Mesh.from_coords(zip(mesh.lons, mesh.lats))
         except:
             raise ValueError(
@@ -326,15 +323,13 @@ def get_site_collection(oqparam):
             return site.SiteCollection.from_points(
                 sm['lon'], sm['lat'], depth, sm)
         # associate the site parameters to the mesh
-        site_model_params = geo.utils.GeographicObjects(
-            sm, operator.itemgetter('lon'), operator.itemgetter('lat'))
         sitecol = site.SiteCollection.from_points(
             mesh.lons, mesh.lats, mesh.depths)
-        dic = site_model_params.assoc(
-            sitecol, oqparam.max_site_model_distance, 'warn')
-        for sid in dic:
+        sc, params = geo.utils.assoc(
+            sm, sitecol, oqparam.max_site_model_distance, 'warn')
+        for sid, param in zip(sc.sids, params):
             for name in site_model_dt.names[2:]:  # all names except lon, lat
-                sitecol.array[sid][name] = dic[sid][name]
+                sitecol.array[sid][name] = param[name]
         return sitecol
 
     # else use the default site params
@@ -502,9 +497,16 @@ def get_source_models(oqparam, gsim_lt, source_model_lt, in_memory=True):
     psr.check_nonparametric_sources(oqparam.investigation_time)
 
     # log if some source file is being used more than once
+    dupl = 0
     for fname, hits in psr.fname_hits.items():
         if hits > 1:
             logging.info('%s has been considered %d times', fname, hits)
+            if not psr.changed_sources:
+                dupl += hits
+    if dupl and not oqparam.optimize_same_id_sources:
+        logging.warn('You are doing redundant calculations: please make sure '
+                     'that different sources have different IDs and set '
+                     'optimize_same_id_sources=true in your .ini file')
 
 
 def getid(src):
@@ -551,13 +553,14 @@ def get_composite_source_model(oqparam, in_memory=True):
     csm = source.CompositeSourceModel(gsim_lt, source_model_lt, smodels,
                                       oqparam.optimize_same_id_sources)
     for sm in csm.source_models:
-        srcs = []
+        counter = collections.Counter()
         for sg in sm.src_groups:
-            srcs.extend(map(getid, sg))
-        if len(set(srcs)) < len(srcs):
-            raise nrml.DuplicatedID(
-                'Found duplicated source IDs: use oq info %s',
-                sm, oqparam.inputs['job_ini'])
+            for srcid in map(getid, sg):
+                counter[srcid] += 1
+        dupl = [srcid for srcid in counter if counter[srcid] > 1]
+        if dupl:
+            raise nrml.DuplicatedID('Found duplicated source IDs in %s: %s'
+                                    % (sm, dupl))
     return csm
 
 
@@ -604,7 +607,7 @@ def get_exposure(oqparam):
     """
     exposure = asset.Exposure.read(
         oqparam.inputs['exposure'], oqparam.calculation_mode,
-        oqparam.region_constraint, oqparam.ignore_missing_costs)
+        oqparam.region, oqparam.ignore_missing_costs)
     exposure.mesh, exposure.assets_by_site = exposure.get_mesh_assets_by_site()
     return exposure
 
@@ -633,54 +636,33 @@ def get_sitecol_assetcol(oqparam, haz_sitecol):
         haz_distance = oqparam.asset_hazard_distance
 
     if haz_sitecol.mesh != exposure.mesh:
-        all_sids = haz_sitecol.complete.sids
-        sids = set(haz_sitecol.sids)
         # associate the assets to the hazard sites
-        siteobjects = geo.utils.GeographicObjects(
-            Site(sid, lon, lat) for sid, lon, lat in
-            zip(haz_sitecol.sids, haz_sitecol.lons, haz_sitecol.lats))
-        assets_by_sid = AccumDict(accum=[])
-        tot_assets = 0
-        for assets in exposure.assets_by_site:
-            tot_assets += len(assets)
-            lon, lat = assets[0].location
-            obj, distance = siteobjects.get_closest(lon, lat)
-            if obj.sid in sids and distance <= haz_distance:
-                # keep the assets, otherwise discard them
-                assets_by_sid += {obj.sid: list(assets)}
-        if not assets_by_sid:
-            raise geo.utils.SiteAssociationError(
-                'Could not associate any site to any assets within the '
-                'asset_hazard_distance of %s km' % haz_distance)
-        mask = numpy.array(
-            [sid in assets_by_sid for sid in all_sids])
-        exposure.assets_by_site = [
-            sorted(assets_by_sid[sid], key=operator.attrgetter('ordinal'))
-            for sid in all_sids]
-        num_assets = sum(len(assets) for assets in exposure.assets_by_site)
-        sitecol = haz_sitecol.complete.filter(mask)
-        logging.info('Associated %d assets to %d sites',
-                     num_assets, len(sitecol))
+        tot_assets = sum(len(assets) for assets in exposure.assets_by_site)
+        mode = 'strict' if oqparam.region_grid_spacing else 'warn'
+        sitecol, assets_by = geo.utils.assoc(
+            exposure.assets_by_site, haz_sitecol, haz_distance, mode)
+        assets_by_site = [[] for _ in sitecol.complete.sids]
+        num_assets = 0
+        for sid, assets in zip(sitecol.sids, assets_by):
+            assets_by_site[sid] = assets
+            num_assets += len(assets)
+        logging.info(
+            'Associated %d assets to %d sites', num_assets, len(sitecol))
         if num_assets < tot_assets:
-            msg = ('Discarded %d assets outside the asset_hazard_distance of '
-                   '%d km') % (tot_assets - num_assets, haz_distance)
-            if oqparam.region_grid_spacing:
-                raise geo.utils.SiteAssociationError(msg)
-            else:
-                logging.warn(msg)
+            logging.warn('Discarded %d assets outside the '
+                         'asset_hazard_distance of %d km',
+                         tot_assets - num_assets, haz_distance)
     else:
+        # asset sites and hazard sites are the same
         sitecol = haz_sitecol
+        assets_by_site = exposure.assets_by_site
 
     asset_refs = [exposure.asset_refs[asset.ordinal]
-                  for assets in exposure.assets_by_site
-                  for asset in assets]
+                  for assets in assets_by_site for asset in assets]
     assetcol = asset.AssetCollection(
-        asset_refs,
-        exposure.assets_by_site,
-        exposure.tagcol,
-        exposure.cost_calculator,
-        oqparam.time_event,
-        occupancy_periods=exposure.occupancy_periods)
+        asset_refs, assets_by_site, exposure.tagcol, exposure.cost_calculator,
+        oqparam.time_event, exposure.occupancy_periods)
+
     return sitecol, assetcol
 
 
@@ -738,7 +720,7 @@ def get_gmfs(oqparam):
     M = len(oqparam.imtls)
     fname = oqparam.inputs['gmfs']
     if fname.endswith('.csv'):
-        array = writers.read_composite_array(fname)
+        array = writers.read_composite_array(fname).array
         R = len(numpy.unique(array['rlzi']))
         if R > 1:
             raise InvalidFile('%s: found %d realizations, currently only one '
