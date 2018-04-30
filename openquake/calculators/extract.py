@@ -17,6 +17,7 @@
 # along with OpenQuake.  If not, see <http://www.gnu.org/licenses/>.
 import collections
 import logging
+import operator
 from h5py._hl.dataset import Dataset
 from h5py._hl.group import Group
 import numpy
@@ -27,7 +28,7 @@ except ImportError:
 else:
     memoized = lru_cache(100)
 from openquake.baselib.hdf5 import ArrayWrapper
-from openquake.baselib.general import DictArray, group_array
+from openquake.baselib.general import DictArray, groupby
 from openquake.baselib.python3compat import encode
 from openquake.calculators import getters
 from openquake.commonlib import calc, util
@@ -482,7 +483,7 @@ def build_damage_array(data, damage_dt):
     L = len(data) if data.shape else 1
     dmg = numpy.zeros(L, damage_dt)
     for lt in damage_dt.names:
-        for i, ms in numpy.ndenumerate(data[lt]):
+        for i, ms in numpy.denumerate(data[lt]):
             if damage_dt[lt].names[0].endswith('_mean'):
                 lst = []
                 for m, s in zip(ms['mean'], ms['stddev']):
@@ -504,3 +505,24 @@ def extract_dmg_by_asset_npz(dstore, what):
         dmg_by_asset = build_damage_array(data[:, rlz.ordinal], damage_dt)
         yield 'rlz-%03d' % rlz.ordinal, util.compose_arrays(
             assets, dmg_by_asset)
+
+
+@extract.add('losses_by_rlz')
+def extract_losses_by_rlz(dstore, what):
+    """
+    :param dstore: a DataStore instance
+    :param what: ignored
+    :returns: an array of shape R and loss type loss_dt
+    """
+    R = dstore['csm_info'].get_num_rlzs()
+    loss_dt = dstore['oqparam'].loss_dt()
+    losses = numpy.zeros(R, loss_dt)
+    data = dstore['losses_by_event'].value
+    by_rlz = operator.itemgetter('rlzi')
+
+    def get_sum(records):
+        return numpy.sum((rec['loss'] for rec in records), axis=0)
+    for rlzi, array in groupby(data, by_rlz, get_sum).items():
+        for lti, lt in enumerate(loss_dt.names):
+            losses[rlzi][lt] = array[lti]
+    return losses
