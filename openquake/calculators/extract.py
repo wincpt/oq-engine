@@ -28,7 +28,7 @@ except ImportError:
 else:
     memoized = lru_cache(100)
 from openquake.baselib.hdf5 import ArrayWrapper
-from openquake.baselib.general import DictArray, groupby
+from openquake.baselib.general import DictArray, group_array, groupby
 from openquake.baselib.python3compat import encode
 from openquake.calculators import getters
 from openquake.commonlib import calc, util
