@@ -21,6 +21,7 @@ Module :mod:`openquake.hazardlib.geo.mesh` defines classes :class:`Mesh` and
 its subclass :class:`RectangularMesh`.
 """
 import numpy
+from scipy.spatial import ConvexHull
 import shapely.geometry
 import shapely.ops
 
@@ -271,6 +272,7 @@ class Mesh(object):
             depths1 = numpy.zeros_like(self.lons)
         else:
             depths1 = self.depths
+        mesh = mesh.get_border()
         if mesh.depths is None:
             depths2 = numpy.zeros_like(mesh.lons)
         else:
@@ -494,6 +496,21 @@ class Mesh(object):
         # avoid circular imports
         from openquake.hazardlib.geo.polygon import Polygon
         return Polygon._from_2d(polygon2d, proj)
+
+    def get_border(self, step=1):
+        """
+        Return a reduced border of the mesh as a 1D mesh
+        """
+        if self.lons.size <= 4:
+            return self
+        points = numpy.zeros((self.lons.size, 2))
+        points[:, 0] = lons = self.lons.flatten()
+        points[:, 1] = lats = self.lats.flatten()
+        if geo_utils.cross_idl(lons.min(), lons.max()):
+            points[:, 0] = lons % 360
+        v = ConvexHull(points).vertices[::step]
+        depths = self.depths[v] if self.depths is not None else None
+        return self.__class__(lons[v], lats[v], depths)
 
 
 class RectangularMesh(Mesh):
