@@ -2,9 +2,9 @@ Event Based Risk QA Test 1
 ==========================
 
 ============== ===================
-checksum32     747,735,378        
-date           2018-03-26T15:55:39
-engine_version 2.10.0-git543cfb0  
+checksum32     348,816,558        
+date           2018-04-30T11:21:46
+engine_version 3.1.0-gitb0812f0   
 ============== ===================
 
 num_sites = 3, num_levels = 25
@@ -46,11 +46,11 @@ structural_vulnerability    `vulnerability_model_stco.xml <vulnerability_model_s
 
 Composite source model
 ----------------------
-========= ====== =============== ================
-smlt_path weight gsim_logic_tree num_realizations
-========= ====== =============== ================
-b1        1.000  simple(2)       2/2             
-========= ====== =============== ================
+========= ======= =============== ================
+smlt_path weight  gsim_logic_tree num_realizations
+========= ======= =============== ================
+b1        1.00000 simple(2)       2/2             
+========= ======= =============== ================
 
 Required parameters per tectonic region type
 --------------------------------------------
@@ -90,30 +90,30 @@ deductibile     absolute
 insurance_limit absolute
 =============== ========
 
-======== ===== ====== === === ========= ==========
-taxonomy mean  stddev min max num_sites num_assets
-RM       1.000 0.0    1   1   2         2         
-RC       1.000 NaN    1   1   1         1         
-W        1.000 NaN    1   1   1         1         
-*ALL*    1.333 0.577  1   2   3         4         
-======== ===== ====== === === ========= ==========
+======== ======= ======= === === ========= ==========
+taxonomy mean    stddev  min max num_sites num_assets
+RM       1.00000 0.0     1   1   2         2         
+RC       1.00000 NaN     1   1   1         1         
+W        1.00000 NaN     1   1   1         1         
+*ALL*    1.33333 0.57735 1   2   3         4         
+======== ======= ======= === === ========= ==========
 
 Slowest sources
 ---------------
-========= ============ ============ ========= ========== ========= =========
-source_id source_class num_ruptures calc_time split_time num_sites num_split
-========= ============ ============ ========= ========== ========= =========
-3         PointSource  6            0.0       1.669E-06  0         0        
-1         PointSource  6            0.0       5.722E-06  0         0        
-2         PointSource  6            0.0       2.623E-06  0         0        
-========= ============ ============ ========= ========== ========= =========
+========= ============ ============ ========= ========== ========= ========= ======
+source_id source_class num_ruptures calc_time split_time num_sites num_split events
+========= ============ ============ ========= ========== ========= ========= ======
+1         PointSource  6            0.00945   8.583E-06  1         1         8     
+2         PointSource  6            0.00604   1.669E-06  1         1         14    
+3         PointSource  6            0.00562   1.192E-06  1         1         20    
+========= ============ ============ ========= ========== ========= ========= ======
 
 Computation times by source typology
 ------------------------------------
 ============ ========= ======
 source_class calc_time counts
 ============ ========= ======
-PointSource  0.0       3     
+PointSource  0.02112   3     
 ============ ========= ======
 
 Duplicated sources
@@ -122,16 +122,16 @@ There are no duplicated sources
 
 Information about the tasks
 ---------------------------
-================== ===== ====== ===== ===== =========
-operation-duration mean  stddev min   max   num_tasks
-compute_ruptures   0.032 NaN    0.032 0.032 1        
-================== ===== ====== ===== ===== =========
+================== ======= ====== ======= ======= =========
+operation-duration mean    stddev min     max     num_tasks
+compute_ruptures   0.02429 NaN    0.02429 0.02429 1        
+================== ======= ====== ======= ======= =========
 
 Informational data
 ------------------
 ================ ======================================================================== ========
 task             sent                                                                     received
-compute_ruptures sources=2.17 KB param=1.01 KB src_filter=830 B monitor=330 B gsims=216 B 11.38 KB
+compute_ruptures sources=2.31 KB param=1.01 KB src_filter=824 B monitor=330 B gsims=216 B 11.81 KB
 ================ ======================================================================== ========
 
 Slowest operations
@@ -139,15 +139,15 @@ Slowest operations
 ============================== ========= ========= ======
 operation                      time_sec  memory_mb counts
 ============================== ========= ========= ======
-managing sources               0.056     0.0       1     
-total compute_ruptures         0.032     2.582     1     
-making contexts                0.013     0.0       9     
-reading exposure               0.010     0.0       1     
-store source_info              0.008     0.0       1     
-saving ruptures                0.007     0.0       1     
-reading composite source model 0.005     0.0       1     
-setting event years            0.003     0.0       1     
-unpickling compute_ruptures    0.001     0.0       1     
-splitting sources              4.940E-04 0.0       1     
-reading site collection        3.471E-04 0.0       1     
+managing sources               0.03926   0.0       1     
+total compute_ruptures         0.02429   3.41797   1     
+making contexts                0.00750   0.0       9     
+store source_info              0.00421   0.0       1     
+reading site collection        0.00372   0.0       1     
+reading exposure               0.00370   0.0       1     
+reading composite source model 0.00335   0.0       1     
+saving ruptures                0.00328   0.0       1     
+setting event years            0.00142   0.0       1     
+unpickling compute_ruptures    6.969E-04 0.0       1     
+splitting sources              4.616E-04 0.0       1     
 ============================== ========= ========= ======

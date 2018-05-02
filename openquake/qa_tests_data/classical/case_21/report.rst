@@ -3,8 +3,8 @@ Classical Hazard QA Test, Case 21
 
 ============== ===================
 checksum32     124,630,436        
-date           2018-03-26T15:55:48
-engine_version 2.10.0-git543cfb0  
+date           2018-04-30T11:21:53
+engine_version 3.1.0-gitb0812f0   
 ============== ===================
 
 num_sites = 1, num_levels = 4
@@ -42,37 +42,37 @@ source_model_logic_tree `source_model_logic_tree.xml <source_model_logic_tree.xm
 
 Composite source model
 ----------------------
-====================== ====== =============== ================
-smlt_path              weight gsim_logic_tree num_realizations
-====================== ====== =============== ================
-b1_mfd1_high_dip_dip30 0.013  trivial(1)      1/1             
-b1_mfd1_high_dip_dip45 0.040  trivial(1)      1/1             
-b1_mfd1_high_dip_dip60 0.013  trivial(1)      1/1             
-b1_mfd1_low_dip_dip30  0.013  trivial(1)      1/1             
-b1_mfd1_low_dip_dip45  0.040  trivial(1)      1/1             
-b1_mfd1_low_dip_dip60  0.013  trivial(1)      1/1             
-b1_mfd1_mid_dip_dip30  0.040  trivial(1)      1/1             
-b1_mfd1_mid_dip_dip45  0.119  trivial(1)      1/1             
-b1_mfd1_mid_dip_dip60  0.040  trivial(1)      1/1             
-b1_mfd2_high_dip_dip30 0.014  trivial(1)      1/1             
-b1_mfd2_high_dip_dip45 0.041  trivial(1)      1/1             
-b1_mfd2_high_dip_dip60 0.014  trivial(1)      1/1             
-b1_mfd2_low_dip_dip30  0.014  trivial(1)      1/1             
-b1_mfd2_low_dip_dip45  0.041  trivial(1)      1/1             
-b1_mfd2_low_dip_dip60  0.014  trivial(1)      1/1             
-b1_mfd2_mid_dip_dip30  0.041  trivial(1)      1/1             
-b1_mfd2_mid_dip_dip45  0.122  trivial(1)      1/1             
-b1_mfd2_mid_dip_dip60  0.041  trivial(1)      1/1             
-b1_mfd3_high_dip_dip30 0.013  trivial(1)      1/1             
-b1_mfd3_high_dip_dip45 0.040  trivial(1)      1/1             
-b1_mfd3_high_dip_dip60 0.013  trivial(1)      1/1             
-b1_mfd3_low_dip_dip30  0.013  trivial(1)      1/1             
-b1_mfd3_low_dip_dip45  0.040  trivial(1)      1/1             
-b1_mfd3_low_dip_dip60  0.013  trivial(1)      1/1             
-b1_mfd3_mid_dip_dip30  0.040  trivial(1)      1/1             
-b1_mfd3_mid_dip_dip45  0.119  trivial(1)      1/1             
-b1_mfd3_mid_dip_dip60  0.040  trivial(1)      1/1             
-====================== ====== =============== ================
+====================== ======= =============== ================
+smlt_path              weight  gsim_logic_tree num_realizations
+====================== ======= =============== ================
+b1_mfd1_high_dip_dip30 0.01320 trivial(1)      1/1             
+b1_mfd1_high_dip_dip45 0.03960 trivial(1)      1/1             
+b1_mfd1_high_dip_dip60 0.01320 trivial(1)      1/1             
+b1_mfd1_low_dip_dip30  0.01320 trivial(1)      1/1             
+b1_mfd1_low_dip_dip45  0.03960 trivial(1)      1/1             
+b1_mfd1_low_dip_dip60  0.01320 trivial(1)      1/1             
+b1_mfd1_mid_dip_dip30  0.03960 trivial(1)      1/1             
+b1_mfd1_mid_dip_dip45  0.11880 trivial(1)      1/1             
+b1_mfd1_mid_dip_dip60  0.03960 trivial(1)      1/1             
+b1_mfd2_high_dip_dip30 0.01360 trivial(1)      1/1             
+b1_mfd2_high_dip_dip45 0.04080 trivial(1)      1/1             
+b1_mfd2_high_dip_dip60 0.01360 trivial(1)      1/1             
+b1_mfd2_low_dip_dip30  0.01360 trivial(1)      1/1             
+b1_mfd2_low_dip_dip45  0.04080 trivial(1)      1/1             
+b1_mfd2_low_dip_dip60  0.01360 trivial(1)      1/1             
+b1_mfd2_mid_dip_dip30  0.04080 trivial(1)      1/1             
+b1_mfd2_mid_dip_dip45  0.12240 trivial(1)      1/1             
+b1_mfd2_mid_dip_dip60  0.04080 trivial(1)      1/1             
+b1_mfd3_high_dip_dip30 0.01320 trivial(1)      1/1             
+b1_mfd3_high_dip_dip45 0.03960 trivial(1)      1/1             
+b1_mfd3_high_dip_dip60 0.01320 trivial(1)      1/1             
+b1_mfd3_low_dip_dip30  0.01320 trivial(1)      1/1             
+b1_mfd3_low_dip_dip45  0.03960 trivial(1)      1/1             
+b1_mfd3_low_dip_dip60  0.01320 trivial(1)      1/1             
+b1_mfd3_mid_dip_dip30  0.03960 trivial(1)      1/1             
+b1_mfd3_mid_dip_dip45  0.11880 trivial(1)      1/1             
+b1_mfd3_mid_dip_dip60  0.03960 trivial(1)      1/1             
+====================== ======= =============== ================
 
 Required parameters per tectonic region type
 --------------------------------------------
@@ -185,19 +185,19 @@ source_model.xml 26     Active Shallow Crust 221          296
 
 Slowest sources
 ---------------
-========= ================= ============ ========= ========== ========= =========
-source_id source_class      num_ruptures calc_time split_time num_sites num_split
-========= ================= ============ ========= ========== ========= =========
-SFLT2     SimpleFaultSource 89           0.246     2.909E-05  61        61       
-SFLT1     SimpleFaultSource 132          0.125     3.815E-06  32        32       
-========= ================= ============ ========= ========== ========= =========
+========= ================= ============ ========= ========== ========= ========= ======
+source_id source_class      num_ruptures calc_time split_time num_sites num_split events
+========= ================= ============ ========= ========== ========= ========= ======
+SFLT2     SimpleFaultSource 89           0.00249   2.980E-05  61        61        0     
+SFLT1     SimpleFaultSource 132          0.00116   4.053E-06  32        32        0     
+========= ================= ============ ========= ========== ========= ========= ======
 
 Computation times by source typology
 ------------------------------------
 ================= ========= ======
 source_class      calc_time counts
 ================= ========= ======
-SimpleFaultSource 0.371     2     
+SimpleFaultSource 0.00365   2     
 ================= ========= ======
 
 Duplicated sources
@@ -206,16 +206,38 @@ There are no duplicated sources
 
 Information about the tasks
 ---------------------------
-================== ===== ====== ===== ===== =========
-operation-duration mean  stddev min   max   num_tasks
-count_ruptures     0.007 0.003  0.002 0.020 65       
-================== ===== ====== ===== ===== =========
+================== ======= ======= ========= ======= =========
+operation-duration mean    stddev  min       max     num_tasks
+count_ruptures     0.00194 0.00102 6.537E-04 0.00484 65       
+================== ======= ======= ========= ======= =========
+
+Fastest task
+------------
+taskno=54, weight=90, duration=0 s, sources="SFLT2"
+
+======== ======= ====== === === =
+variable mean    stddev min max n
+======== ======= ====== === === =
+nsites   1.00000 NaN    1   1   1
+weight   90      NaN    90  90  1
+======== ======= ====== === === =
+
+Slowest task
+------------
+taskno=1, weight=60, duration=0 s, sources="SFLT1"
+
+======== ======= ====== === === =
+variable mean    stddev min max n
+======== ======= ====== === === =
+nsites   1.00000 NaN    1   1   1
+weight   60      NaN    60  60  1
+======== ======= ====== === === =
 
 Informational data
 ------------------
 ============== ================================================================================= ========
 task           sent                                                                              received
-count_ruptures sources=72.88 KB srcfilter=45.83 KB param=27.04 KB monitor=20.95 KB gsims=7.62 KB 23.89 KB
+count_ruptures sources=82.59 KB srcfilter=45.45 KB param=26.66 KB monitor=20.95 KB gsims=7.62 KB 23.51 KB
 ============== ================================================================================= ========
 
 Slowest operations
@@ -223,13 +245,13 @@ Slowest operations
 ============================== ========= ========= ======
 operation                      time_sec  memory_mb counts
 ============================== ========= ========= ======
-total count_ruptures           0.470     3.398     65    
-reading composite source model 0.443     0.0       1     
-managing sources               0.112     0.0       1     
-store source_info              0.007     0.0       1     
-unpickling count_ruptures      0.003     0.0       65    
-splitting sources              0.002     0.0       1     
-aggregate curves               0.001     0.0       65    
-reading site collection        2.878E-04 0.0       1     
-saving probability maps        3.290E-05 0.0       1     
+reading composite source model 0.58731   0.0       1     
+total count_ruptures           0.12631   1.90625   65    
+managing sources               0.08177   0.0       1     
+store source_info              0.00668   0.0       1     
+unpickling count_ruptures      0.00259   0.0       65    
+splitting sources              0.00177   0.0       1     
+aggregate curves               0.00125   0.0       65    
+reading site collection        3.145E-04 0.0       1     
+saving probability maps        3.409E-05 0.0       1     
 ============================== ========= ========= ======

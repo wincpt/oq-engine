@@ -18,13 +18,14 @@
 
 from __future__ import division
 import math
+import time
 import logging
 import operator
 import numpy
 
 from openquake.baselib import parallel, hdf5
 from openquake.baselib.python3compat import encode
-from openquake.baselib.general import AccumDict, block_splitter
+from openquake.baselib.general import AccumDict, block_splitter, groupby
 from openquake.hazardlib.calc.hazard_curve import classical, ProbabilityMap
 from openquake.hazardlib.stats import compute_pmap_stats
 from openquake.hazardlib import source
@@ -82,6 +83,7 @@ class PSHACalculator(base.HazardCalculator):
     Classical PSHA calculator
     """
     core_task = classical
+    prefilter = True
 
     def agg_dicts(self, acc, pmap_by_grp):
         """
@@ -162,7 +164,7 @@ class PSHACalculator(base.HazardCalculator):
         if num_tiles > 1:
             tiles = self.sitecol.split_in_tiles(num_tiles)
         else:
-            tiles = [self.sitecol]
+            tiles = [self.sitecol.complete]
         param = dict(imtls=oq.imtls,
                      truncation_level=oq.truncation_level,
                      floating_magnitude=oq.floating_magnitude,
@@ -172,13 +174,17 @@ class PSHACalculator(base.HazardCalculator):
         for tile_i, tile in enumerate(tiles, 1):
             num_tasks = 0
             num_sources = 0
+            src_filter = SourceFilter(tile, oq.maximum_distance,
+                                      oq.prefilter_sources)
             if num_tiles > 1:
-                logging.info('Prefiltering tile %d of %d', tile_i, len(tiles))
-            else:
-                logging.info('Prefiltering sources')
+                logging.info('Processing tile %d of %d', tile_i, len(tiles))
             with self.monitor('prefiltering'):
-                src_filter = SourceFilter(tile, oq.maximum_distance)
-                csm = self.csm.filter(src_filter)
+                if oq.prefilter_sources != 'no' and self.prefilter:
+                    logging.info('Prefiltering sources')
+                    csm = self.csm.filter(src_filter)
+                else:
+                    csm = self.csm
+
             if tile_i == 1:  # set it only on the first tile
                 maxweight = csm.get_maxweight(
                     weight, tasks_per_tile, minweight)
@@ -193,9 +199,9 @@ class PSHACalculator(base.HazardCalculator):
                 logging.warn('Found %d duplicated sources',
                              csm.has_dupl_sources)
             for sg in csm.src_groups:
-                if sg.src_interdep == 'mutex':
+                if sg.src_interdep == 'mutex' and len(sg) > 0:
                     gsims = self.csm.info.gsim_lt.get_gsims(sg.trt)
-                    yield sg, csm.src_filter, gsims, param, monitor
+                    yield sg, src_filter, gsims, param, monitor
                     num_tasks += 1
                     num_sources += len(sg.sources)
             # NB: csm.get_sources_by_trt discards the mutex sources
@@ -206,6 +212,10 @@ class PSHACalculator(base.HazardCalculator):
                     num_tasks += 1
                     num_sources += len(block)
             logging.info('Sent %d sources in %d tasks', num_sources, num_tasks)
+            # cleanup filtering information for the next tile
+            for src in csm.get_sources():
+                if hasattr(src, 'indices'):
+                    del src.indices
         self.csm.info.tot_weight = totweight
 
     def post_execute(self, pmap_by_grp_id):
@@ -239,6 +249,41 @@ class PSHACalculator(base.HazardCalculator):
                     # only for the case of a single realization
                     self.datastore['disagg_by_src/source_id'] = numpy.array(
                         sorted(data), grp_source_dt)
+
+
+# used in PreClassicalCalculator
+def count_ruptures(sources, srcfilter, gsims, param, monitor):
+    """
+    Count the number of ruptures contained in the given sources by applying a
+    raw source filtering on the integration distance. Return a dictionary
+    src_group_id -> {}.
+    All sources must belong to the same tectonic region type.
+    """
+    dic = groupby(sources, lambda src: src.src_group_ids[0])
+    acc = AccumDict({grp_id: {} for grp_id in dic})
+    acc.eff_ruptures = {grp_id: 0 for grp_id in dic}
+    acc.calc_times = AccumDict(accum=numpy.zeros(4))
+    for grp_id in dic:
+        for src in sources:
+            t0 = time.time()
+            src_id = src.source_id.split(':')[0]
+            sites = srcfilter.get_close_sites(src)
+            if sites is not None:
+                acc.eff_ruptures[grp_id] += src.num_ruptures
+                dt = time.time() - t0
+                acc.calc_times[src_id] += numpy.array(
+                    [src.weight, len(sites), dt, 1])
+    return acc
+
+
+@base.calculators.add('preclassical')
+class PreCalculator(PSHACalculator):
+    """
+    Calculator to filter the sources and compute the number of effective
+    ruptures
+    """
+    core_task = count_ruptures
+    prefilter = False
 
 
 def fix_ones(pmap):

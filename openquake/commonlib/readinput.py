@@ -170,7 +170,7 @@ def gen_sm_paths(smlt):
         yield paths
 
 
-def get_oqparam(job_ini, pkg=None, calculators=None, hc_id=None):
+def get_oqparam(job_ini, pkg=None, calculators=None, hc_id=None, validate=1):
     """
     Parse a dictionary of parameters from an INI-style config file.
 
@@ -183,6 +183,8 @@ def get_oqparam(job_ini, pkg=None, calculators=None, hc_id=None):
         valid choices for `calculation_mode`
     :param hc_id:
         Not None only when called from a post calculation
+    :param validate:
+        Flag. By default it is true and the parameters are validated
     :returns:
         An :class:`openquake.commonlib.oqvalidation.OqParam` instance
         containing the validate and casted parameters/values parsed from
@@ -201,7 +203,8 @@ def get_oqparam(job_ini, pkg=None, calculators=None, hc_id=None):
     if hc_id:
         job_ini.update(hazard_calculation_id=str(hc_id))
     oqparam = OqParam(**job_ini)
-    oqparam.validate()
+    if validate:
+        oqparam.validate()
     return oqparam
 
 
@@ -258,21 +261,17 @@ def get_mesh(oqparam):
         else:
             raise NotImplementedError('Reading from %s' % fname)
         return mesh
-    elif oqparam.region:
-        # close the linear polygon ring by appending the first
-        # point to the end
-        firstpoint = geo.Point(*oqparam.region[0])
-        points = [geo.Point(*xy) for xy in oqparam.region] + [firstpoint]
+    elif oqparam.region and oqparam.region_grid_spacing:
+        poly = geo.Polygon.from_wkt(oqparam.region)
         try:
-            mesh = geo.Polygon(points).discretize(oqparam.region_grid_spacing)
+            mesh = poly.discretize(oqparam.region_grid_spacing)
             return geo.Mesh.from_coords(zip(mesh.lons, mesh.lats))
-        except:
+        except Exception:
             raise ValueError(
                 'Could not discretize region %(region)s with grid spacing '
                 '%(region_grid_spacing)s' % vars(oqparam))
     elif 'exposure' in oqparam.inputs:
         return exposure.mesh
-
 
 
 site_model_dt = numpy.dtype([
@@ -501,9 +500,16 @@ def get_source_models(oqparam, gsim_lt, source_model_lt, in_memory=True):
     psr.check_nonparametric_sources(oqparam.investigation_time)
 
     # log if some source file is being used more than once
+    dupl = 0
     for fname, hits in psr.fname_hits.items():
         if hits > 1:
             logging.info('%s has been considered %d times', fname, hits)
+            if not psr.changed_sources:
+                dupl += hits
+    if dupl and not oqparam.optimize_same_id_sources:
+        logging.warn('You are doing redundant calculations: please make sure '
+                     'that different sources have different IDs and set '
+                     'optimize_same_id_sources=true in your .ini file')
 
 
 def getid(src):
@@ -550,13 +556,14 @@ def get_composite_source_model(oqparam, in_memory=True):
     csm = source.CompositeSourceModel(gsim_lt, source_model_lt, smodels,
                                       oqparam.optimize_same_id_sources)
     for sm in csm.source_models:
-        srcs = []
+        counter = collections.Counter()
         for sg in sm.src_groups:
-            srcs.extend(map(getid, sg))
-        if len(set(srcs)) < len(srcs):
-            raise nrml.DuplicatedID(
-                'Found duplicated source IDs: use oq info %s',
-                sm, oqparam.inputs['job_ini'])
+            for srcid in map(getid, sg):
+                counter[srcid] += 1
+        dupl = [srcid for srcid in counter if counter[srcid] > 1]
+        if dupl:
+            raise nrml.DuplicatedID('Found duplicated source IDs in %s: %s'
+                                    % (sm, dupl))
     return csm
 
 
@@ -601,9 +608,10 @@ def get_exposure(oqparam):
     :returns:
         an :class:`Exposure` instance or a compatible AssetCollection
     """
+    logging.info('Reading the exposure')
     exposure = asset.Exposure.read(
         oqparam.inputs['exposure'], oqparam.calculation_mode,
-        oqparam.region_constraint, oqparam.ignore_missing_costs)
+        oqparam.region, oqparam.ignore_missing_costs)
     exposure.mesh, exposure.assets_by_site = exposure.get_mesh_assets_by_site()
     return exposure
 

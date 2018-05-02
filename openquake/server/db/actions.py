@@ -260,12 +260,12 @@ def get_outputs(db, job_id):
 DISPLAY_NAME = {
     'gmf_data': 'Ground Motion Fields',
     'dmg_by_asset': 'Average Asset Damages',
-    # 'damages_by_asset': 'Average Asset Damages',
-    # 'damages_by_event': 'Aggregate Event Damages',
+    'dmg_by_event': 'Aggregate Event Damages',
     'losses_by_asset': 'Average Asset Losses',
     'losses_by_event': 'Aggregate Event Losses',
     'damages-rlzs': 'Asset Damage Distribution',
     'damages-stats': 'Asset Damage Statistics',
+    'dmg_by_event': 'Aggregate Event Damages',
     'avg_losses-rlzs': 'Average Asset Losses',
     'avg_losses-stats': 'Average Asset Losses Statistics',
     'loss_curves': 'Asset Loss Curves',
@@ -668,6 +668,19 @@ def get_results(db, job_id):
 
 
 # ############################### db commands ########################### #
+
+def get_executing_jobs(db):
+    """
+    :param db:
+        a :class:`openquake.server.dbapi.Db` instance
+    :returns:
+        (id, user_name, start_time) tuples
+    """
+    query = '''-- executing jobs
+SELECT id, user_name, start_time
+FROM job WHERE status='executing' ORDER BY id desc'''
+    return db(query)
+
 
 def get_longest_jobs(db):
     """

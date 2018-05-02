@@ -20,23 +20,37 @@
 Module :mod:`openquake.hazardlib.geo.utils` contains functions that are common
 to several geographical primitives and some other low-level spatial operations.
 """
+import math
 import logging
 import operator
 import collections
-try:
-    import rtree
-except:
-    rtree = None
+import rtree
 import numpy
 import shapely.geometry
 
 from openquake.hazardlib.geo import geodetic
-from openquake.hazardlib.geo.geodetic import (
-    EARTH_RADIUS, geodetic_distance, min_idx_dst)
+from openquake.hazardlib.geo.geodetic import EARTH_RADIUS, geodetic_distance
 from openquake.baselib.slots import with_slots
 
 U32 = numpy.uint32
+KM_TO_DEGREES = 0.0089932  # 1 degree == 111 km
+DEGREES_TO_RAD = 0.01745329252  # 1 radians = 57.295779513 degrees
 SphericalBB = collections.namedtuple('SphericalBB', 'west east north south')
+
+
+def angular_distance(km, lat, lat2=None):
+    """
+    Return the angular distance of two points at the given latitude.
+
+    >>> '%.3f' % angular_distance(100, lat=40)
+    '1.174'
+    >>> '%.3f' % angular_distance(100, lat=80)
+    '5.179'
+    """
+    if lat2 is not None:
+        # use the largest latitude to compute the angular distance
+        lat = max(abs(lat), abs(lat2))
+    return km * KM_TO_DEGREES / math.cos(lat * DEGREES_TO_RAD)
 
 
 class SiteAssociationError(Exception):
@@ -57,13 +71,14 @@ class _GeographicObjects(object):
         elif isinstance(objects, numpy.ndarray):
             self.lons = objects['lon']
             self.lats = objects['lat']
-        if rtree:
-            self.index = rtree.index.Index()
-            self.proj = OrthographicProjection.from_lons_lats(
-                self.lons, self.lats)
-            xs, ys = self.proj(self.lons, self.lats)
-            for i, (x, y) in enumerate(zip(xs, ys)):
-                self.index.insert(i, (x, y, x, y))
+
+        self.proj = OrthographicProjection.from_lons_lats(
+            self.lons, self.lats)
+        xs, ys = self.proj(self.lons, self.lats)
+        self.index = rtree.index.Index()
+        # no http://toblerity.org/rtree/performance.html#use-stream-loading!
+        for i, (x, y) in enumerate(zip(xs, ys)):
+            self.index.insert(i, (x, y, x, y))
 
     def get_closest(self, lon, lat):
         """
@@ -74,23 +89,20 @@ class _GeographicObjects(object):
         :param lat: latitude in degrees
         :param max_distance: distance in km (or None)
         """
-        if rtree:
-            x, y = self.proj(lon, lat)
-            idx = list(self.index.nearest((x, y, x, y), 1))[0]
-            min_dist = geodetic_distance(
-                lon, lat, self.lons[idx], self.lats[idx])
-        else:
-            zeros = numpy.zeros_like(self.lons)
-            idx, min_dist = min_idx_dst(self.lons, self.lats, zeros, lon, lat)
+        x, y = self.proj(lon, lat)
+        idx = list(self.index.nearest((x, y, x, y), 1))[0]
+        min_dist = geodetic_distance(
+            lon, lat, self.lons[idx], self.lats[idx])
         return self.objects[idx], min_dist
 
     def assoc(self, sitecol, assoc_dist, mode):
         """
         :param sitecol: a (filtered) site collection
         :param assoc_dist: the maximum distance for association
-        :param mode: 'strict', 'error', 'warn' or 'ignore'
+        :param mode: 'strict', 'warn' or 'filter'
         :returns: (filtered site collection, filtered objects)
         """
+        assert mode in 'strict warn filter', mode
         dic = {}
         for sid, lon, lat in zip(sitecol.sids, sitecol.lons, sitecol.lats):
             obj, distance = self.get_closest(lon, lat)
@@ -102,13 +114,13 @@ class _GeographicObjects(object):
                 dic[sid] = obj  # associate outside
                 logging.warn('Association to %s km from site (%s %s)',
                              distance, lon, lat)
-            elif mode == 'ignore':
+            elif mode == 'filter':
                 pass  # do not associate
             elif mode == 'strict':
                 raise SiteAssociationError(
                     'There is nothing closer than %s km '
                     'to site (%s %s)' % (assoc_dist, lon, lat))
-        if not dic and mode == 'error':
+        if not dic:
             raise SiteAssociationError(
                 'No sites could be associated within %s km' % assoc_dist)
         return (sitecol.filtered(dic),
@@ -121,9 +133,10 @@ class _GeographicObjects(object):
 
         :param assets_by_sites: a list of lists of assets
         :param assoc_dist: the maximum distance for association
-        :param mode: 'strict' or 'error'
+        :param mode: 'strict' or 'warn'
         :returns: (filtered site collection, filtered assets by site)
         """
+        assert mode in 'strict warn', mode
         self.objects.filtered  # self.objects must be a SiteCollection
         assets_by_sid = collections.defaultdict(list)
         for assets in assets_by_site:
@@ -136,8 +149,11 @@ class _GeographicObjects(object):
                 raise SiteAssociationError(
                     'There is nothing closer than %s km '
                     'to site (%s %s)' % (assoc_dist, lon, lat))
+            elif mode == 'warn':
+                logging.warn('Discarding %s, lon=%.5f, lat=%.5f',
+                             assets, lon, lat)
         sids = sorted(assets_by_sid)
-        if not sids and mode == 'error':
+        if not sids:
             raise SiteAssociationError(
                 'Could not associate any site to any assets within the '
                 'asset_hazard_distance of %s km' % assoc_dist)
@@ -147,12 +163,23 @@ class _GeographicObjects(object):
         return self.objects.filtered(sids), assets_by_site
 
 
+def get_min_distance(mesh1, mesh2):
+    """
+    Get the minimum distance between 2D meshes by using rtree
+    """
+    go = _GeographicObjects(mesh1)
+    min_dist = min(go.get_closest(lon, lat)[1]
+                   for lon, lat in zip(mesh2.lons, mesh2.lats))
+    return min_dist
+
+
 def assoc(objects, sitecol, assoc_dist, mode):
     """
     Associate geographic objects to a site collection.
 
     :param objects:
-        an array with fields lon, lat or a list of geographic objects
+        something with .lons, .lats or ['lon'] ['lat'], or a list of lists
+        of objects with a .location attribute (i.e. assets_by_site)
     :param assoc_dist:
         the maximum distance for association
     :param mode:
@@ -160,8 +187,8 @@ def assoc(objects, sitecol, assoc_dist, mode):
         if 'error' fail if all sites are not associated
     :returns: (filtered site collection, filtered objects)
     """
-    if isinstance(objects, numpy.ndarray):
-        # objects is a geo array with lon, lat fields
+    if isinstance(objects, numpy.ndarray) or hasattr(objects, 'lons'):
+        # objects is a geo array with lon, lat fields or a mesh-like instance
         return _GeographicObjects(objects).assoc(sitecol, assoc_dist, mode)
     else:  # objects is the list assets_by_site
         return _GeographicObjects(sitecol).assoc2(objects, assoc_dist, mode)
@@ -235,6 +262,18 @@ def get_longitudinal_extent(lon1, lon2):
     return (lon2 - lon1 + 180) % 360 - 180
 
 
+def get_bounding_box(obj, maxdist):
+    """
+    Return the dilated bounding box of a geometric object
+    """
+    if hasattr(obj, 'get_bounding_box'):
+        return obj.get_bounding_box(maxdist)
+    bbox = obj.polygon.get_bbox()
+    a1 = maxdist * KM_TO_DEGREES
+    a2 = angular_distance(maxdist, bbox[1], bbox[3])
+    return bbox[0] - a2, bbox[1] - a1, bbox[2] + a2, bbox[3] + a1
+
+
 def get_spherical_bounding_box(lons, lats):
     """
     Given a collection of points find and return the bounding box,
@@ -254,13 +293,14 @@ def get_spherical_bounding_box(lons, lats):
     """
     north, south = numpy.max(lats), numpy.min(lats)
     west, east = numpy.min(lons), numpy.max(lons)
-    assert (-180 <= west <= 180) and (-180 <= east <= 180)
+    assert (-180 <= west <= 180) and (-180 <= east <= 180), (west, east)
     if get_longitudinal_extent(west, east) < 0:
         # points are lying on both sides of the international date line
         # (meridian 180). the actual west longitude is the lowest positive
         # longitude and east one is the highest negative.
         if hasattr(lons, 'flatten'):
-            lons = lons.flatten()  # fixes an issue with GriddedSurfaces
+            # fixes test_surface_crossing_international_date_line
+            lons = lons.flatten()
         west = min(lon for lon in lons if lon > 0)
         east = max(lon for lon in lons if lon < 0)
         if not all((get_longitudinal_extent(west, lon) >= 0
@@ -522,6 +562,20 @@ def point_to_polygon_distance(polygon, pxx, pyy):
     return result.reshape(pxx.shape)
 
 
+def fix_lon(lon):
+    """
+    :returns: a valid longitude in the range -180 <= lon < 180
+
+    >>> fix_lon(11)
+    11
+    >>> fix_lon(181)
+    -179
+    >>> fix_lon(-182)
+    178
+    """
+    return (lon + 180) % 360 - 180
+
+
 def cross_idl(lon1, lon2):
     """
     Return True if two longitude values define line crossing international date
@@ -547,6 +601,49 @@ def cross_idl(lon1, lon2):
     # a line crosses the international date line if the end positions
     # have different sign and they are more than 180 degrees longitude apart
     return lon1 * lon2 < 0 and abs(lon1 - lon2) > 180
+
+
+def normalize_lons(l1, l2):
+    """
+    An international date line safe way of returning a range of longitudes.
+
+    >>> normalize_lons(20, 30)  # no IDL within the range
+    [(20, 30)]
+    >>> normalize_lons(-17, +17)  # no IDL within the range
+    [(-17, 17)]
+    >>> normalize_lons(-178, +179)
+    [(-180, -178), (179, 180)]
+    >>> normalize_lons(178, -179)
+    [(-180, -179), (178, 180)]
+    >>> normalize_lons(179, -179)
+    [(-180, -179), (179, 180)]
+    >>> normalize_lons(177, -176)
+    [(-180, -176), (177, 180)]
+    """
+    if l1 > l2:  # exchange lons
+        l1, l2 = l2, l1
+    delta = l2 - l1
+    if l1 < 0 and l2 > 0 and delta > 180:
+        return [(-180, l1), (l2, 180)]
+    elif l1 > 0 and l2 > 180 and delta < 180:
+        return [(l1, 180), (-180, l2 - 360)]
+    elif l1 < -180 and l2 < 0 and delta < 180:
+        return [(l1 + 360, 180), (l2, -180)]
+    return [(l1, l2)]
+
+
+def within(bbox, lonlat_index):
+    """
+    :param bbox: a bounding box in lon, lat
+    :param lonlat_index: an rtree index in lon, lat
+    :returns: array of indices within the bounding box
+    """
+    lon1, lat1, lon2, lat2 = bbox
+    set_ = set()
+    for l1, l2 in normalize_lons(lon1, lon2):
+        box = (l1, lat1, l2, lat2)
+        set_ |= set(lonlat_index.intersection(box))
+    return numpy.array(sorted(set_), numpy.uint32)
 
 
 def plane_fit(points):

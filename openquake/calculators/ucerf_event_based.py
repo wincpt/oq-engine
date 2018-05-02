@@ -35,7 +35,7 @@ from openquake.risklib import riskinput
 from openquake.commonlib import readinput, source, calc, util
 from openquake.calculators import base, event_based, getters
 from openquake.calculators.event_based_risk import (
-    EbriskCalculator, event_based_risk)
+    EbrCalculator, event_based_risk)
 
 from openquake.hazardlib.geo.surface.multi import MultiSurface
 from openquake.hazardlib.pmf import PMF
@@ -651,10 +651,6 @@ class UCERFSource(object):
                 sources.append(ps)
         return sources
 
-    def filter_sites_by_distance_to_source(self, integration_distance, sites):
-        # do not filter
-        return sites
-
 
 def build_idx_set(branch_id, start_date):
     """
@@ -709,6 +705,7 @@ def compute_ruptures(sources, src_filter, gsims, param, monitor):
                     background_sids, src_filter, seed)
             with filt_mon:
                 for rup, n_occ in zip(rups, n_occs):
+                    rup.serial = serial
                     rup.seed = seed
                     try:
                         r_sites, rrup = idist.get_closest(sitecol, rup)
@@ -721,8 +718,7 @@ def compute_ruptures(sources, src_filter, gsims, param, monitor):
                         events.append((0, src.src_group_id, ses_idx, sample))
                     if events:
                         evs = numpy.array(events, stochastic.event_dt)
-                        ebruptures.append(
-                            EBRupture(rup, indices, evs, serial))
+                        ebruptures.append(EBRupture(rup, indices, evs))
                         serial += 1
     res.num_events = len(stochastic.set_eids(ebruptures))
     res[src.src_group_id] = ebruptures
@@ -861,7 +857,7 @@ class UCERFHazardCalculator(event_based.EventBasedCalculator):
 
 
 @base.calculators.add('ucerf_risk')
-class UCERFRiskCalculator(EbriskCalculator):
+class UCERFRiskCalculator(EbrCalculator):
     """
     Event based risk calculator for UCERF, parallelizing on the source models
     """
