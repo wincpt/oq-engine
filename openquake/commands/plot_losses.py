@@ -20,7 +20,7 @@ from openquake.baselib import sap, datastore
 from openquake.calculators.extract import extract
 
 
-def make_figure(losses_by_rlzi, loss_types, nbins):
+def make_figure1(losses_by_rlzi, loss_types, nbins):
     """
     :param losses_by_event: composite array (eid, rlzi, losses)
     :param loss_types: list of loss types
@@ -45,17 +45,43 @@ def make_figure(losses_by_rlzi, loss_types, nbins):
     return plt
 
 
+def make_figure2(losses, nbins):
+    """
+    :param losses_by_event: composite array (eid, rlzi, losses)
+    :param loss_types: list of loss types
+    """
+    # NB: matplotlib is imported inside since it is a costly import
+    import matplotlib.pyplot as plt
+    L = len(losses.dtype.names)
+    fig = plt.figure()
+    for lti, lt in enumerate(losses.dtype.names):
+        ls = losses[lt]
+        ls.sort()
+        if numpy.isnan(ls).all():
+            continue
+        ax = fig.add_subplot(1, L, lti + 1)
+        ax.set_xlabel('loss_type=%s' % lt)
+        ax.hist(ls, nbins, rwidth=.9)
+        ax.set_title('loss=%.5e$\pm$%.5e' % (ls.mean(), ls.std(ddof=1)))
+    return plt
+
+
 @sap.Script
-def plot_losses(calc_id, bins=7):
+def plot_losses(calc_id=-1, bins=7):
     """
     losses_by_event plotter
     """
     # read the hazard data
     dstore = datastore.read(calc_id)
-    losses_by_rlzi = dict(extract(dstore, 'losses_by_event'))
     oq = dstore['oqparam']
-    plt = make_figure(losses_by_rlzi, oq.loss_dt().names, bins)
+    if oq.calculation_mode == 'scenario_risk':
+        losses_by_rlzi = dict(extract(dstore, 'losses_by_event'))
+        plt = make_figure1(losses_by_rlzi, oq.loss_dt().names, bins)
+    elif oq.calculation_mode == 'event_based_risk':
+        losses = extract(dstore, 'losses_by_rlz')
+        plt = make_figure2(losses, bins)
     plt.show()
+
 
 plot_losses.arg('calc_id', 'a computation id', type=int)
 plot_losses.opt('bins', 'number of histogram bins', type=int)
