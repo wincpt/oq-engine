@@ -21,6 +21,7 @@ import logging
 import random
 import numpy
 from openquake.baselib import sap, datastore
+from openquake.hazardlib.calc.filters import IntegrationDistance
 from openquake.hazardlib.geo.utils import (
     cross_idl, angular_distance, KM_TO_DEGREES)
 
@@ -51,19 +52,20 @@ def plot_sites(calc_id=-1):
     logging.basicConfig(level=logging.INFO)
     dstore = datastore.read(calc_id)
     oq = dstore['oqparam']
+    maxdist = IntegrationDistance(oq.maximum_distance)
     sitecol = dstore['sitecol']
     lons, lats = sitecol.lons, sitecol.lats
     info = dstore['source_info'].value
     info = info[info['calc_time'] > 0]
     if len(info) > 100:
         logging.info('Sampling 100 sources of %d', len(info))
-        info = random.Random(42).sample(info, 100)
+        info = random.Random(42).sample(list(info), 100)
     sources = [Source(rec) for rec in info]
     lonset = set(lons)
     for src in sources:
         lonset.update(src.lons)
     idl = cross_idl(min(lonset), max(lonset))
-    rects = [src.get_rectangle(idl, oq.maximum_distance['default'])
+    rects = [src.get_rectangle(idl, maxdist('TRT'))
              for src in sources]
 
     fig, ax = p.subplots()
