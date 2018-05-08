@@ -21,21 +21,22 @@ import logging
 import random
 import numpy
 from openquake.baselib import sap, datastore
-from openquake.hazardlib.geo.utils import cross_idl, fix_lon
-from openquake.hazardlib.calc.filters import SourceFilter
-from openquake.commonlib import readinput
+from openquake.hazardlib.geo.utils import (
+    cross_idl, angular_distance, KM_TO_DEGREES)
 
 
-def cross(lonlat, width, height):
-    return cross_idl(lonlat[0], lonlat[0] + width)
+class Source:
+    def __init__(self, info):
+        self.lons, self.lats = info['lonlats'].reshape(2, -1)
 
-
-def fix_polygon(poly, idl):
-    # manage the international date line and add the first point as last point
-    # to close the polygon
-    lons = poly.lons % 360 if idl else poly.lons
-    return (numpy.append(lons, lons[0]),
-            numpy.append(poly.lats, poly.lats[0]))
+    def get_rectangle(self, idl, maxdist):
+        if idl:
+            self.lons = self.lons % 360
+        west, east = self.lons.min(), self.lons.max()
+        south, north = self.lats.min(), self.lats.max()
+        a1 = maxdist * KM_TO_DEGREES
+        a2 = angular_distance(maxdist, north, south)
+        return (west, south), west - east + 2 * a2, north - south + 2 * a1
 
 
 @sap.Script
@@ -52,29 +53,27 @@ def plot_sites(calc_id=-1):
     oq = dstore['oqparam']
     sitecol = dstore['sitecol']
     lons, lats = sitecol.lons, sitecol.lats
-    srcfilter = SourceFilter(sitecol, oq.maximum_distance,
-                             oq.prefilter_sources)
-    csm = readinput.get_composite_source_model(oq).filter(srcfilter)
-    sources = csm.get_sources()
-    if len(sources) > 100:
-        logging.info('Sampling 100 sources of %d', len(sources))
-        sources = random.Random(42).sample(sources, 100)
+    info = dstore['source_info'].value
+    info = info[info['calc_time'] > 0]
+    if len(info) > 100:
+        logging.info('Sampling 100 sources of %d', len(info))
+        info = random.Random(42).sample(info, 100)
+    sources = [Source(rec) for rec in info]
+    lonset = set(lons)
+    for src in sources:
+        lonset.update(src.lons)
+    idl = cross_idl(min(lonset), max(lonset))
+    rects = [src.get_rectangle(idl, oq.maximum_distance['default'])
+             for src in sources]
+
     fig, ax = p.subplots()
     ax.grid(True)
-    rects = [srcfilter.get_rectangle(src) for src in sources]
-    lonset = set(lons)
-    for ((lon, lat), width, height) in rects:
-        lonset.add(lon)
-        lonset.add(fix_lon(lon + width))
-    idl = cross_idl(min(lonset), max(lonset))
-    if idl:
-        lons = lons % 360
-    for src, ((lon, lat), width, height) in zip(sources, rects):
-        lonlat = (lon % 360 if idl else lon, lat)
+    for src, (lonlat, width, height) in zip(sources, rects):
         ax.add_patch(Rectangle(lonlat, width, height, fill=False))
-        if hasattr(src.__class__, 'polygon'):
-            xs, ys = fix_polygon(src.polygon, idl)
-            p.plot(xs, ys, marker='.')
+        # add a point to close the source polygon
+        xs = numpy.append(src.lons, src.lons[0])
+        ys = numpy.append(src.lats, src.lats[0])
+        p.plot(xs, ys, marker='.')
 
     p.scatter(lons, lats, marker='+')
     p.show()

@@ -972,6 +972,7 @@ class SourceInfo(object):
         ('num_sites', numpy.uint32),       # 5
         ('num_split',  numpy.uint32),      # 6
         ('events', numpy.uint32),          # 7
+        ('lonlats', hdf5.lonlats),         # 8
     ])
 
     def __init__(self, src, calc_time=0, split_time=0, num_split=0):
@@ -983,3 +984,5 @@ class SourceInfo(object):
         self.split_time = split_time
         self.num_split = num_split
         self.events = 0  # set in event based
+        poly = src.polygon
+        self.lonlats = numpy.concatenate([poly.lons, poly.lats])

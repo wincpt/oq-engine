@@ -36,6 +36,7 @@ from openquake.baselib.python3compat import decode
 vbytes = h5py.special_dtype(vlen=bytes)
 vstr = h5py.special_dtype(vlen=str)
 vuint32 = h5py.special_dtype(vlen=numpy.uint32)
+lonlats = h5py.special_dtype(vlen=numpy.float32)
 
 
 def create(hdf5, name, dtype, shape=(None,), compression=None,

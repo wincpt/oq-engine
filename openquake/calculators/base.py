@@ -51,6 +51,7 @@ U32 = numpy.uint32
 U64 = numpy.uint64
 F32 = numpy.float32
 TWO16 = 2 ** 16
+logversion = True
 
 
 class InvalidCalculationID(Exception):
@@ -58,8 +59,6 @@ class InvalidCalculationID(Exception):
     Raised when running a post-calculation on top of an incompatible
     pre-calculation
     """
-
-logversion = True
 
 
 PRECALC_MAP = dict(
@@ -192,7 +191,7 @@ class BaseCalculator(with_metaclass(abc.ABCMeta)):
                 self.post_execute(self.result)
             self.before_export()
             self.export(kw.get('exports', ''))
-        except:
+        except BaseException:
             if kw.get('pdb'):  # post-mortem debug
                 tb = sys.exc_info()[2]
                 traceback.print_tb(tb)
