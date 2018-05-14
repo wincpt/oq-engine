@@ -41,7 +41,7 @@ class PMF(object):
         those can be objects of any (mixed or homogeneous) type.
 
     :param epsilon:
-        the tolerance for the sum of the probabilities (default %e)
+        the tolerance for the sum of the probabilities (default %s)
 
     :raises ValueError:
         If probabilities do not sum up to 1 or there is zero or negative
