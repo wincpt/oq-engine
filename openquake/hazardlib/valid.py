@@ -28,11 +28,13 @@ import numpy
 
 from openquake.baselib.python3compat import with_metaclass
 from openquake.baselib.general import distinct
-from openquake.baselib import hdf5
+from openquake.baselib import hdf5, config
 from openquake.hazardlib import imt, scalerel, gsim
 from openquake.hazardlib.gsim.gmpe_table import GMPETable
 from openquake.hazardlib.calc import disagg
 from openquake.hazardlib.calc.filters import IntegrationDistance
+
+EPS = config.general.precision
 
 SCALEREL = scalerel.get_available_magnitude_scalerel()
 
@@ -849,7 +851,7 @@ def check_weights(nodes_with_a_weight):
     :param nodes_with_a_weight: a list of Node objects with a weight attribute
     """
     weights = [n['weight'] for n in nodes_with_a_weight]
-    if abs(sum(weights) - 1.) > 1E-12:
+    if abs(sum(weights) - 1.) > EPS:
         raise ValueError('The weights do not sum up to 1: %s' % weights)
     return nodes_with_a_weight
 
@@ -867,7 +869,7 @@ def weights(value):
     ValueError: The weights do not sum up to 1: [0.1, 0.2, 0.8]
     """
     probs = probabilities(value)
-    if abs(sum(probs) - 1.) > 1E-12:
+    if abs(sum(probs) - 1.) > EPS:
         raise ValueError('The weights do not sum up to 1: %s' % probs)
     return probs
 

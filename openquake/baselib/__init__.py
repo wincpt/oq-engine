@@ -99,8 +99,12 @@ def boolean(flag):
         return False
     raise ValueError('Unknown flag %r' % s)
 
+
 config.read(soft_mem_limit=int, hard_mem_limit=int, port=int,
             multi_user=boolean)
+config.zworkers['master_host'] = config.general.master_host
+config.dbserver['host'] = config.general.master_host
+config.amqp['host'] = config.general.master_host
 
 if config.directory.custom_tmp:
     os.environ['TMPDIR'] = config.directory.custom_tmp
