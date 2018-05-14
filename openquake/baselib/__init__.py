@@ -105,6 +105,7 @@ config.read(soft_mem_limit=int, hard_mem_limit=int, port=int,
 config.zworkers['master_host'] = config.general.master_host
 config.dbserver['host'] = config.general.master_host
 config.amqp['host'] = config.general.master_host
+config.general['precision'] = float(config.general.precision)
 
 if config.directory.custom_tmp:
     os.environ['TMPDIR'] = config.directory.custom_tmp

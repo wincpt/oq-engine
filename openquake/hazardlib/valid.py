@@ -222,6 +222,7 @@ class Regex(object):
                              (value, self.rx.pattern))
         return value
 
+
 name = Regex(r'^[a-zA-Z_]\w*$')
 
 name_with_dashes = Regex(r'^[a-zA-Z_][\w\-]*$')
