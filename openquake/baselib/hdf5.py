@@ -317,6 +317,27 @@ class File(h5py.File):
             for k, v in attrib.items():
                 dset.attrs[k] = v
 
+    def save_vlen(self, key, data):
+        """
+        Save a sequence of variable-length arrays
+
+        :param key: name of the dataset
+        :param data: data to store as vlen arrays
+        """
+        dt = data[0].dtype
+        dset = create(self, key, h5py.special_dtype(vlen=dt),
+                      (len(data),), fillvalue=None)
+        nbytes = 0
+        totlen = 0
+        for i, val in enumerate(data):
+            dset[i] = val
+            nbytes += val.nbytes
+            totlen += len(val)
+        attrs = h5py.File.__getitem__(self, key).attrs
+        attrs['nbytes'] = nbytes
+        attrs['avg_len'] = totlen / len(data)
+        self.flush()
+
 
 def _resolve_duplicates(dicts):
     # when node dictionaries with duplicated tags are passed (for instance

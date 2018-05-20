@@ -98,7 +98,7 @@ def extract_calc_id_datadir(hdf5path, datadir=None):
         return get_last_calc_id(datadir) + 1, datadir
     try:
         calc_id = int(hdf5path)
-    except:
+    except ValueError:
         datadir = os.path.dirname(hdf5path)
         mo = re.match('calc_(\d+)\.hdf5', os.path.basename(hdf5path))
         if mo is None:
@@ -265,25 +265,6 @@ class DataStore(collections.MutableMapping):
         """
         return hdf5.create(
             self.hdf5, key, dtype, shape, compression, fillvalue, attrs)
-
-    def save_vlen(self, key, data):
-        """
-        Save a sequence of variable-length arrays
-
-        :param key: name of the dataset
-        :param data: data to store as vlen arrays
-        """
-        dt = data[0].dtype
-        dset = self.create_dset(
-            key, h5py.special_dtype(vlen=dt), (len(data),), fillvalue=None)
-        nbytes = 0
-        totlen = 0
-        for i, val in enumerate(data):
-            dset[i] = val
-            nbytes += val.nbytes
-            totlen += len(val)
-        self.set_attrs(key, nbytes=nbytes, avg_len=totlen / len(data))
-        self.flush()
 
     def extend(self, key, array, **attrs):
         """

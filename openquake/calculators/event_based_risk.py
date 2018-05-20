@@ -567,7 +567,7 @@ class EbrCalculator(base.RiskCalculator):
                 stats=[encode(name) for (name, func) in stats], units=units)
 
         if 'all_loss_ratios' in self.datastore:
-            self.datastore.save_vlen(
+            self.datastore.hdf5.save_vlen(
                 'all_loss_ratios/indices',
                 [numpy.array(self.indices[aid], riskinput.indices_dt)
                  for aid in range(self.A)])

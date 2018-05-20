@@ -26,6 +26,7 @@ try:
 except ImportError:
     rtree = None
 from scipy.interpolate import interp1d
+from openquake.baselib import hdf5
 from openquake.baselib.parallel import Starmap
 from openquake.baselib.general import gettemp, groupby
 from openquake.baselib.python3compat import raise_
@@ -285,7 +286,7 @@ class SourceFilter(BaseFilter):
 
         :param sources: a sequence of sources
         :param monitor: a Monitor instance
-        :returns: a dictionary src_group_id -> sources
+        :returns: an OrderedDict src_group_id -> sources
         """
         sources_by_grp = Starmap.apply(
             prefilter, (sources, self, monitor), distribute=self.distribute,
@@ -294,7 +295,18 @@ class SourceFilter(BaseFilter):
         # avoid task ordering issues
         for sources in sources_by_grp.values():
             sources.sort(key=operator.attrgetter('source_id'))
-        return sources_by_grp
+        dic = collections.OrderedDict(
+            item for item in sorted(sources_by_grp.items()))
+        no = 0
+        indices = []
+        for grp_id in dic:
+            for src in dic[grp_id]:
+                src.id = no
+                no += 1
+                indices.append(src.indices)
+        with hdf5.File(monitor.hdf5path) as h5:
+            h5.save_vlen('source_indices', indices)
+        return dic
 
 
 class RtreeFilter(SourceFilter):

@@ -133,13 +133,6 @@ def get_assets(dstore):
     return numpy.array(asset_data, dtlist)
 
 
-def shared_dir_on():
-    """
-    :returns: True if a shared_dir has been set in openquake.cfg, else False
-    """
-    return config.directory.shared_dir
-
-
 def reader(func):
     """
     Decorator used to mark functions that require read access to the
