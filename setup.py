@@ -121,7 +121,6 @@ setup(
     package_data={"openquake.engine": [
         "openquake.cfg", "README.md",
         "LICENSE", "CONTRIBUTORS.txt"]},
-    namespace_packages=['openquake'],
     install_requires=install_requires,
     extras_require=extras_require,
     scripts=['bin/oq'],
