@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 # vim: tabstop=4 shiftwidth=4 softtabstop=4
 #
-# Copyright (C) 2014-2017 GEM Foundation
+# Copyright (C) 2014-2018 GEM Foundation
 #
 # OpenQuake is free software: you can redistribute it and/or modify it
 # under the terms of the GNU Affero General Public License as published
@@ -15,7 +15,6 @@
 #
 # You should have received a copy of the GNU Affero General Public License
 # along with OpenQuake. If not, see <http://www.gnu.org/licenses/>.
-from __future__ import print_function
 import os
 import sys
 import getpass
@@ -91,11 +90,14 @@ def del_calculation(job_id, confirmed=False):
             'all associated outputs?\nThis action cannot be undone. (y/n): '):
         try:
             abort(job_id)
-            logs.dbcmd('del_calc', job_id, getpass.getuser())
+            resp = logs.dbcmd('del_calc', job_id, getpass.getuser())
         except RuntimeError as err:
             safeprint(err)
         else:
-            print('Removed %d' % job_id)
+            if 'success' in resp:
+                print('Removed %d' % job_id)
+            else:
+                print(resp['error'])
 
 
 @sap.Script

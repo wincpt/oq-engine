@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 # vim: tabstop=4 shiftwidth=4 softtabstop=4
 #
-# Copyright (C) 2014-2017 GEM Foundation
+# Copyright (C) 2014-2018 GEM Foundation
 #
 # OpenQuake is free software: you can redistribute it and/or modify it
 # under the terms of the GNU Affero General Public License as published
@@ -15,14 +15,13 @@
 #
 # You should have received a copy of the GNU Affero General Public License
 # along with OpenQuake. If not, see <http://www.gnu.org/licenses/>.
-
-from __future__ import division
 import warnings
 import numpy
 import h5py
 
 from openquake.baselib import hdf5
 from openquake.baselib.python3compat import decode
+from openquake.hazardlib.source.rupture import BaseRupture
 from openquake.hazardlib.geo.mesh import surface_to_mesh, point3d
 from openquake.hazardlib.gsim.base import ContextMaker
 from openquake.hazardlib.imt import from_string
@@ -43,8 +42,6 @@ F64 = numpy.float64
 
 EVENTS = -2
 NBYTES = -1
-event_dt = numpy.dtype([('eid', U64), ('grp_id', U16), ('ses', U32),
-                        ('sample', U32)])
 
 # ############## utilities for the classical calculator ############### #
 
@@ -73,6 +70,7 @@ def convert_to_array(pmap, nsites, imtls):
                 curve['%s-%s' % (imt, iml)] = pcurve.array[idx]
                 idx += 1
     return curves
+
 
 # ######################### hazard maps ################################### #
 
@@ -271,7 +269,7 @@ def fix_minimum_intensity(min_iml, imts):
 
     >>> min_iml = {'PGA': 0.1, 'default': 0.05}
     >>> fix_minimum_intensity(min_iml, ['PGA', 'PGV'])
-    array([ 0.1 ,  0.05], dtype=float32)
+    array([0.1 , 0.05], dtype=float32)
     >>> sorted(min_iml.items())
     [('PGA', 0.1), ('PGV', 0.05)]
     """
@@ -332,8 +330,8 @@ class RuptureData(object):
         data = []
         for ebr in ebruptures:
             rup = ebr.rupture
-            rc = self.cmaker.make_rupture_context(rup)
-            ruptparams = tuple(getattr(rc, param) for param in self.params)
+            self.cmaker.add_rup_params(rup)
+            ruptparams = tuple(getattr(rup, param) for param in self.params)
             point = rup.surface.get_middle_point()
             multi_lons, multi_lats = rup.surface.get_surface_boundaries()
             bounds = ','.join('((%s))' % ','.join(
@@ -439,4 +437,14 @@ class RuptureSerializer(object):
         self.datastore.flush()
 
     def close(self):
-        pass
+        """
+        Save information about the rupture codes as attributes of the
+        'ruptures' dataset.
+        """
+        if 'ruptures' not in self.datastore:  # for UCERF
+            return
+        codes = numpy.unique(self.datastore['ruptures']['code'])
+        attr = {'code_%d' % code: ' '.join(
+            cls.__name__ for cls in BaseRupture.types[code])
+                for code in codes}
+        self.datastore.set_attrs('ruptures', **attr)

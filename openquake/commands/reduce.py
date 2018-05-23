@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 # vim: tabstop=4 shiftwidth=4 softtabstop=4
 #
-# Copyright (C) 2015-2017 GEM Foundation
+# Copyright (C) 2015-2018 GEM Foundation
 #
 # OpenQuake is free software: you can redistribute it and/or modify it
 # under the terms of the GNU Affero General Public License as published
@@ -16,11 +16,10 @@
 #
 # You should have received a copy of the GNU Affero General Public License
 # along with OpenQuake. If not, see <http://www.gnu.org/licenses/>.
-
-from __future__ import print_function
 import csv
 import random
 import shutil
+import numpy
 from openquake.hazardlib import valid, nrml, InvalidFile
 from openquake.baselib.python3compat import encode
 from openquake.baselib import sap
@@ -73,6 +72,14 @@ def reduce(fname, reduction_factor):
         _save_csv(fname, lines, header)
         print('Extracted %d lines out of %d' % (len(lines), len(all_lines)))
         return
+    elif fname.endswith('.npy'):
+        array = numpy.load(fname)
+        shutil.copy(fname, fname + '.bak')
+        print('Copied the original file in %s.bak' % fname)
+        arr = numpy.array(random_filter(array, reduction_factor))
+        numpy.save(fname, arr)
+        print('Extracted %d rows out of %d' % (len(arr), len(array)))
+        return
     node = nrml.read(fname)
     model = node[0]
     if model.tag.endswith('exposureModel'):
@@ -98,6 +105,7 @@ def reduce(fname, reduction_factor):
     with open(fname, 'wb') as f:
         nrml.write([model], f, xmlns=node['xmlns'])
     print('Extracted %d nodes out of %d' % (num_nodes, total))
+
 
 reduce.arg('fname', 'path to the model file')
 reduce.arg('reduction_factor', 'reduction factor in the range 0..1',

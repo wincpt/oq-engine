@@ -1,31 +1,31 @@
-#  -*- coding: utf-8 -*-
-#  vim: tabstop=4 shiftwidth=4 softtabstop=4
-
-#  Copyright (c) 2018, GEM Foundation
-
-#  OpenQuake is free software: you can redistribute it and/or modify it
-#  under the terms of the GNU Affero General Public License as published
-#  by the Free Software Foundation, either version 3 of the License, or
-#  (at your option) any later version.
-
-#  OpenQuake is distributed in the hope that it will be useful,
-#  but WITHOUT ANY WARRANTY; without even the implied warranty of
-#  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-#  GNU Affero General Public License for more details.
-
-#  You should have received a copy of the GNU Affero General Public License
-#  along with OpenQuake.  If not, see <http://www.gnu.org/licenses/>.
+# -*- coding: utf-8 -*-
+# vim: tabstop=4 shiftwidth=4 softtabstop=4
+#
+# Copyright (C) 2018 GEM Foundation
+#
+# OpenQuake is free software: you can redistribute it and/or modify it
+# under the terms of the GNU Affero General Public License as published
+# by the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# OpenQuake is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU Affero General Public License for more details.
+#
+# You should have received a copy of the GNU Affero General Public License
+# along with OpenQuake.  If not, see <http://www.gnu.org/licenses/>.
 import collections
 import operator
 import logging
-import mock
 import numpy
+from openquake.baselib import hdf5
 from openquake.baselib.general import (
     AccumDict, groupby, group_array, get_array, block_splitter)
-from openquake.hazardlib.gsim.base import ContextMaker
+from openquake.hazardlib.gsim.base import ContextMaker, FarAwayRupture
 from openquake.hazardlib import calc, geo, probability_map, stats
-from openquake.hazardlib.geo.mesh import RectangularMesh
-from openquake.hazardlib.source.rupture import BaseRupture, EBRupture
+from openquake.hazardlib.geo.mesh import Mesh, RectangularMesh
+from openquake.hazardlib.source.rupture import BaseRupture, EBRupture, classes
 
 U16 = numpy.uint16
 U32 = numpy.uint32
@@ -42,19 +42,21 @@ class PmapGetter(object):
     Read hazard curves from the datastore for all realizations or for a
     specific realization.
 
-    :param dstore: a DataStore instance
+    :param dstore: a DataStore instance or file system path to it
     :param sids: the subset of sites to consider (if None, all sites)
     :param rlzs_assoc: a RlzsAssoc instance (if None, infers it)
     """
-    def __init__(self, dstore, sids=None, rlzs_assoc=None):
-        self.rlzs_assoc = rlzs_assoc or dstore['csm_info'].get_rlzs_assoc()
+    def __init__(self, dstore, rlzs_assoc, sids=None):
         self.dstore = dstore
-        self.weights = [rlz.weight for rlz in self.rlzs_assoc.realizations]
         self.sids = sids
+        self.rlzs_assoc = rlzs_assoc
         self.eids = None
         self.nbytes = 0
-        if sids is None:
-            self.sids = dstore['sitecol'].complete.sids
+        self.sids = sids
+
+    @property
+    def weights(self):
+        return [rlz.weight for rlz in self.rlzs_assoc.realizations]
 
     def init(self):
         """
@@ -62,7 +64,12 @@ class PmapGetter(object):
         """
         if hasattr(self, 'data'):  # already initialized
             return
-        self.dstore.open()  # if not
+        if isinstance(self.dstore, str):
+            self.dstore = hdf5.File(self.dstore)
+        else:
+            self.dstore.open()  # if not
+        if self.sids is None:
+            self.sids = self.dstore['sitecol'].complete.sids
         self.imtls = self.dstore['oqparam'].imtls
         self.data = collections.OrderedDict()
         try:
@@ -250,7 +257,7 @@ class GmfGetter(object):
     """
     def __init__(self, rlzs_by_gsim, ebruptures, sitecol, imtls,
                  min_iml, maximum_distance, truncation_level,
-                 correlation_model, samples=1):
+                 correlation_model, filter_distance, samples=1):
         assert sitecol is sitecol.complete, sitecol
         self.rlzs_by_gsim = rlzs_by_gsim
         self.num_rlzs = sum(len(rlzs) for gsim, rlzs in rlzs_by_gsim.items())
@@ -261,9 +268,11 @@ class GmfGetter(object):
         self.cmaker = ContextMaker(
             rlzs_by_gsim,
             calc.filters.IntegrationDistance(maximum_distance)
-            if isinstance(maximum_distance, dict) else maximum_distance)
+            if isinstance(maximum_distance, dict) else maximum_distance,
+            filter_distance)
         self.truncation_level = truncation_level
         self.correlation_model = correlation_model
+        self.filter_distance = filter_distance
         self.samples = samples
         self.gmf_data_dt = numpy.dtype(
             [('rlzi', U16), ('sid', U32),
@@ -285,9 +294,15 @@ class GmfGetter(object):
         self.computers = []
         eids = []
         for ebr in self.ebruptures:
-            computer = calc.gmf.GmfComputer(
-                ebr, self.sitecol, self.imtls, self.cmaker,
-                self.truncation_level, self.correlation_model)
+            try:
+                computer = calc.gmf.GmfComputer(
+                    ebr, self.sitecol, self.imtls, self.cmaker,
+                    self.truncation_level, self.correlation_model)
+            except FarAwayRupture:
+                # due to numeric errors ruptures within the maximum_distance
+                # when written can be outside when read; I found a case with
+                # a distance of 99.9996936 km over a maximum distance of 100 km
+                continue
             self.computers.append(computer)
             eids.append(ebr.events['eid'])
         self.eids = numpy.concatenate(eids) if eids else []
@@ -370,6 +385,7 @@ class LossRatiosGetter(object):
     """
     def __init__(self, dstore, aids=None, lazy=True):
         self.dstore = dstore
+        dstore.open()
         dset = self.dstore['all_loss_ratios/indices']
         self.aids = list(aids or range(len(dset)))
         self.indices = [dset[aid] for aid in self.aids]
@@ -420,12 +436,8 @@ def get_ruptures_by_grp(dstore, slice_=slice(None)):
     if slice_.stop is None:
         n = len(dstore['ruptures']) - (slice_.start or 0)
         logging.info('Reading %d ruptures from the datastore', n)
-    # disable check on PlaceSurface to support UCERF ruptures
-    with mock.patch(
-            'openquake.hazardlib.geo.surface.PlanarSurface.'
-            'IMPERFECT_RECTANGLE_TOLERANCE', numpy.inf):
-        rgetter = RuptureGetter(dstore, slice_)
-        return groupby(rgetter, operator.attrgetter('grp_id'))
+    rgetter = RuptureGetter(dstore, slice_)
+    return groupby(rgetter, operator.attrgetter('grp_id'))
 
 
 def get_maxloss_rupture(dstore, loss_type):
@@ -496,7 +508,11 @@ class RuptureGetter(object):
 
     def __iter__(self):
         self.dstore.open()  # if needed
-        oq = self.dstore['oqparam']
+        attrs = self.dstore.get_attrs('ruptures')
+        code2cls = {}  # code -> rupture_cls, surface_cls
+        for key, val in attrs.items():
+            if key.startswith('code_'):
+                code2cls[int(key[5:])] = [classes[v] for v in val.split()]
         grp_trt = self.dstore['csm_info'].grp_by("trt")
         ruptures = self.dstore['ruptures'][self.mask]
         # NB: ruptures.sort(order='serial') causes sometimes a SystemError:
@@ -509,16 +525,10 @@ class RuptureGetter(object):
             if self.grp_id is not None and self.grp_id != rec['grp_id']:
                 continue
             mesh = rec['points'].reshape(rec['sx'], rec['sy'], rec['sz'])
-            rupture_cls, surface_cls, source_cls = BaseRupture.types[
-                rec['code']]
+            rupture_cls, surface_cls = code2cls[rec['code']]
             rupture = object.__new__(rupture_cls)
+            rupture.serial = serial
             rupture.surface = object.__new__(surface_cls)
-            # MISSING: case complex_fault_mesh_spacing != rupture_mesh_spacing
-            if 'Complex' in surface_cls.__name__:
-                mesh_spacing = oq.complex_fault_mesh_spacing
-            else:
-                mesh_spacing = oq.rupture_mesh_spacing
-            rupture.source_typology = source_cls
             rupture.mag = rec['mag']
             rupture.rake = rec['rake']
             rupture.seed = rec['seed']
@@ -526,26 +536,24 @@ class RuptureGetter(object):
             rupture.occurrence_rate = rec['occurrence_rate']
             rupture.tectonic_region_type = grp_trt[rec['grp_id']]
             pmfx = rec['pmfx']
-            # disable check on PlanarSurface to support UCERF ruptures
-            with mock.patch(
-                    'openquake.hazardlib.geo.surface.PlanarSurface.'
-                    'IMPERFECT_RECTANGLE_TOLERANCE', numpy.inf):
-                if pmfx != -1:
-                    rupture.pmf = self.dstore['pmfs'][pmfx]
-                if surface_cls is geo.PlanarSurface:
-                    rupture.surface = geo.PlanarSurface.from_array(
-                        mesh_spacing, rec['points'])
-                elif surface_cls.__name__.endswith('MultiSurface'):
-                    rupture.surface.__init__([
-                        geo.PlanarSurface.from_array(
-                            mesh_spacing, m1.flatten())
-                        for m1 in mesh])
-                else:  # fault surface, strike and dip will be computed
-                    rupture.surface.strike = rupture.surface.dip = None
-                    m = mesh[0]
-                    rupture.surface.mesh = RectangularMesh(
-                        m['lon'], m['lat'], m['depth'])
-            ebr = EBRupture(rupture, (), evs, serial)
+            if pmfx != -1:
+                rupture.pmf = self.dstore['pmfs'][pmfx]
+            if surface_cls is geo.PlanarSurface:
+                rupture.surface = geo.PlanarSurface.from_array(rec['points'])
+            elif surface_cls is geo.MultiSurface:
+                rupture.surface.__init__([
+                    geo.PlanarSurface.from_array(m1.flatten()) for m1 in mesh])
+            elif surface_cls is geo.GriddedSurface:
+                # fault surface, strike and dip will be computed
+                rupture.surface.strike = rupture.surface.dip = None
+                m = mesh[0]
+                rupture.surface.mesh = Mesh(m['lon'], m['lat'], m['depth'])
+            else:  # fault surface, strike and dip will be computed
+                rupture.surface.strike = rupture.surface.dip = None
+                m = mesh[0]
+                rupture.surface.__init__(
+                    RectangularMesh(m['lon'], m['lat'], m['depth']))
+            ebr = EBRupture(rupture, (), evs)
             ebr.eidx1 = rec['eidx1']
             ebr.eidx2 = rec['eidx2']
             # not implemented: rupture_slip_direction

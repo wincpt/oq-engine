@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 # vim: tabstop=4 shiftwidth=4 softtabstop=4
 #
-# Copyright (C) 2012-2017 GEM Foundation
+# Copyright (C) 2012-2018 GEM Foundation
 #
 # OpenQuake is free software: you can redistribute it and/or modify it
 # under the terms of the GNU Affero General Public License as published
@@ -19,7 +19,6 @@
 """
 This module includes the scientific API of the oq-risklib
 """
-from __future__ import division
 import abc
 import copy
 import bisect
@@ -33,7 +32,6 @@ from scipy import interpolate, stats, random
 from openquake.baselib.general import CallableDict, group_array
 from openquake.hazardlib.stats import compute_stats2
 from openquake.risklib import utils
-from openquake.baselib.python3compat import with_metaclass
 
 F32 = numpy.float32
 U32 = numpy.uint32
@@ -49,11 +47,11 @@ def fine_graining(points, steps):
     >>> fine_graining([0, 1], steps=1)
     [0, 1]
     >>> fine_graining([0, 1], steps=2)
-    array([ 0. ,  0.5,  1. ])
+    array([0. , 0.5, 1. ])
     >>> fine_graining([0, 1], steps=3)
-    array([ 0.        ,  0.33333333,  0.66666667,  1.        ])
+    array([0.        , 0.33333333, 0.66666667, 1.        ])
     >>> fine_graining([0, 0.5, 0.7, 1], steps=2)
-    array([ 0.  ,  0.25,  0.5 ,  0.6 ,  0.7 ,  0.85,  1.  ])
+    array([0.  , 0.25, 0.5 , 0.6 , 0.7 , 0.85, 1.  ])
 
     N points become S * (N - 1) + 1 points with S > 0
     """
@@ -357,6 +355,7 @@ class VulnerabilityFunctionWithPMF(VulnerabilityFunction):
         self.dtype = numpy.dtype(ls)
 
     def init(self):
+        # the seed is reset in CompositeRiskModel.__init__
         self._probs_i1d = interpolate.interp1d(self.imls, self.probs)
         self.set_distribution(None)
 
@@ -402,8 +401,7 @@ class VulnerabilityFunctionWithPMF(VulnerabilityFunction):
 
     def sample(self, probs, _covs, idxs, epsilons):
         """
-        Sample the epsilons and applies the corrections to the probabilities.
-        This method is called only if there are epsilons.
+        Sample the .loss_ratios with the given probabilities.
 
         :param probs:
            array of E' floats
@@ -534,6 +532,8 @@ class FragilityFunctionDiscrete(object):
         """
         highest_iml = self.imls[-1]
         imls = numpy.array(imls)
+        if imls.sum() == 0.0:
+            return numpy.zeros_like(imls)
         imls[imls > highest_iml] = highest_iml
         result = self.interp(imls)
         if self.no_damage_limit:
@@ -725,7 +725,7 @@ class FragilityModel(dict):
 DISTRIBUTIONS = CallableDict()
 
 
-class Distribution(with_metaclass(abc.ABCMeta)):
+class Distribution(metaclass=abc.ABCMeta):
     """
     A Distribution class models continuous probability distribution of
     random variables used to sample losses of a set of assets. It is
@@ -1084,8 +1084,8 @@ def insured_loss_curve(curve, deductible, insured_limit):
     >>> losses = numpy.array([3, 20, 101])
     >>> poes = numpy.array([0.9, 0.5, 0.1])
     >>> insured_loss_curve(numpy.array([losses, poes]), 5, 100)
-    array([[  3.        ,  20.        ],
-           [  0.85294118,   0.5       ]])
+    array([[ 3.        , 20.        ],
+           [ 0.85294118,  0.5       ]])
     """
     losses, poes = curve[:, curve[0] <= insured_limit]
     limit_poe = interpolate.interp1d(
@@ -1258,7 +1258,8 @@ def return_periods(eff_time, num_losses):
     >>> return_periods(100, 2)
     array([ 50, 100], dtype=uint32)
     >>> return_periods(1000, 1000)
-    array([   1,    2,    5,   10,   20,   50,  100,  200,  500, 1000], dtype=uint32)
+    array([   1,    2,    5,   10,   20,   50,  100,  200,  500, 1000],
+          dtype=uint32)
     """
     assert eff_time >= 2, 'eff_time too small: %s' % eff_time
     assert num_losses >= 2, 'num_losses too small: %s' % num_losses
@@ -1294,7 +1295,7 @@ def losses_by_period(losses, return_periods, num_events, eff_time):
 
     >>> losses = [3, 2, 3.5, 4, 3, 23, 11, 2, 1, 4, 5, 7, 8, 9, 13]
     >>> losses_by_period(losses, [1, 2, 5, 10, 20, 50, 100], 20, 100)
-    array([  nan,   nan,   0. ,   3.5,   8. ,  13. ,  23. ])
+    array([ nan,  nan,  0. ,  3.5,  8. , 13. , 23. ])
     """
     if num_events < len(losses):
         raise ValueError(
@@ -1387,9 +1388,9 @@ class LossesByPeriodBuilder(object):
                     self.num_events[rlzi], self.eff_time)
         return array
 
-    def build(self, agg_loss_table_array, stats=()):
+    def build(self, losses_by_event, stats=()):
         """
-        :param agg_loss_table_array:
+        :param losses_by_event:
             the aggregate loss table as an array
         :param stats:
             list of pairs [(statname, statfunc), ...]
@@ -1398,12 +1399,13 @@ class LossesByPeriodBuilder(object):
         """
         P, R = len(self.return_periods), len(self.weights)
         array = numpy.zeros((P, R), self.loss_dt)
-        dic = group_array(agg_loss_table_array, 'rlzi')
+        dic = group_array(losses_by_event, 'rlzi')
         for r in dic:
             num_events = self.num_events[r]
             losses = dic[r]['loss']
             for lti, lt in enumerate(self.loss_dt.names):
                 ls = losses[:, lti].flatten()  # flatten only in ucerf
+                # NB: do not use squeeze or the gmf_ebrisk tests will break
                 lbp = losses_by_period(
                     ls, self.return_periods, num_events, self.eff_time)
                 array[:, r][lt] = lbp

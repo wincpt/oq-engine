@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 # vim: tabstop=4 shiftwidth=4 softtabstop=4
 #
-# Copyright (C) 2014-2017 GEM Foundation
+# Copyright (C) 2014-2018 GEM Foundation
 #
 # OpenQuake is free software: you can redistribute it and/or modify it
 # under the terms of the GNU Affero General Public License as published
@@ -20,13 +20,13 @@ import os
 import mock
 import unittest
 import tempfile
-from openquake.baselib.general import writetmp
+from openquake.baselib.general import gettemp
 from openquake.hazardlib import InvalidFile
 from openquake.commonlib.oqvalidation import OqParam
 
 TMP = tempfile.gettempdir()
 
-GST = {'gsim_logic_tree': writetmp('''\
+GST = {'gsim_logic_tree': gettemp('''\
 <nrml xmlns="http://openquake.org/xmlns/nrml/0.5">
     <logicTree logicTreeID='lt1'>
         <logicTreeBranchingLevel branchingLevelID="bl1">

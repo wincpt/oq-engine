@@ -2,9 +2,9 @@ Classical PSHA using Alaska 2007 active shallow crust grid model
 ================================================================
 
 ============== ===================
-checksum32     4,227,047,805      
-date           2018-02-25T06:42:51
-engine_version 2.10.0-git1f7c0c0  
+checksum32     2,061,302,359      
+date           2018-05-15T04:13:13
+engine_version 3.1.0-git0acbc11   
 ============== ===================
 
 num_sites = 21, num_levels = 114
@@ -44,11 +44,11 @@ source_model_logic_tree `source_model_logic_tree.xml <source_model_logic_tree.xm
 
 Composite source model
 ----------------------
-========================= ====== =============== ================
-smlt_path                 weight gsim_logic_tree num_realizations
-========================= ====== =============== ================
-Alaska_asc_grid_NSHMP2007 1.000  simple(4)       4/4             
-========================= ====== =============== ================
+========================= ======= =============== ================
+smlt_path                 weight  gsim_logic_tree num_realizations
+========================= ======= =============== ================
+Alaska_asc_grid_NSHMP2007 1.00000 simple(4)       4/4             
+========================= ======= =============== ================
 
 Required parameters per tectonic region type
 --------------------------------------------
@@ -71,43 +71,27 @@ Realizations per (TRT, GSIM)
 
 Number of ruptures per tectonic region type
 -------------------------------------------
-======================================================================== ====== ==================== ============ ============
-source_model                                                             grp_id trt                  eff_ruptures tot_ruptures
-======================================================================== ====== ==================== ============ ============
-Alaska_asc_grid_NSHMP2007.xml
-                    extra_source_model.xml 1      Active Shallow Crust 276          1,104       
-======================================================================== ====== ==================== ============ ============
-
-Informational data
-------------------
-======================= =============================================================================
-count_ruptures.received max_per_task 827 B, tot 827 B                                                
-count_ruptures.sent     sources 2.85 KB, srcfilter 1.76 KB, param 1.63 KB, gsims 418 B, monitor 330 B
-hazard.input_weight     126.4                                                                        
-hazard.n_imts           6                                                                            
-hazard.n_levels         114                                                                          
-hazard.n_realizations   4                                                                            
-hazard.n_sites          21                                                                           
-hazard.n_sources        2                                                                            
-hazard.output_weight    2394.0                                                                       
-hostname                tstation.gem.lan                                                             
-require_epsilons        False                                                                        
-======================= =============================================================================
+==================================================== ====== ==================== ============ ============
+source_model                                         grp_id trt                  eff_ruptures tot_ruptures
+==================================================== ====== ==================== ============ ============
+Alaska_asc_grid_NSHMP2007.xml extra_source_model.xml 1      Active Shallow Crust 368          1,104       
+==================================================== ====== ==================== ============ ============
 
 Slowest sources
 ---------------
-========= ================ ============ ========= ========= =========
-source_id source_class     num_ruptures calc_time num_sites num_split
-========= ================ ============ ========= ========= =========
-mps-0     MultiPointSource 1,104        3.581E-04 5         3        
-========= ================ ============ ========= ========= =========
+========= ================ ============ ========= ========== ========= ========= ======
+source_id source_class     num_ruptures calc_time split_time num_sites num_split events
+========= ================ ============ ========= ========== ========= ========= ======
+2         MultiPointSource 1,104        2.513E-04 3.793E-04  5         4         0     
+1         MultiPointSource 160          0.0       1.490E-04  0         0         0     
+========= ================ ============ ========= ========== ========= ========= ======
 
 Computation times by source typology
 ------------------------------------
 ================ ========= ======
 source_class     calc_time counts
 ================ ========= ======
-MultiPointSource 3.581E-04 1     
+MultiPointSource 2.513E-04 2     
 ================ ========= ======
 
 Duplicated sources
@@ -116,21 +100,56 @@ There are no duplicated sources
 
 Information about the tasks
 ---------------------------
-================== ===== ====== ===== ===== =========
-operation-duration mean  stddev min   max   num_tasks
-count_ruptures     0.002 NaN    0.002 0.002 1        
-================== ===== ====== ===== ===== =========
+================== ======= ======= ======= ======= =========
+operation-duration mean    stddev  min     max     num_tasks
+prefilter          0.00463 0.00109 0.00242 0.00616 14       
+count_ruptures     0.00455 NaN     0.00455 0.00455 1        
+================== ======= ======= ======= ======= =========
+
+Fastest task
+------------
+taskno=1, weight=162, duration=0 s, sources="2"
+
+======== ======= ======= === === =
+variable mean    stddev  min max n
+======== ======= ======= === === =
+nsites   1.25000 0.50000 1   2   4
+weight   40      7.62153 36  52  4
+======== ======= ======= === === =
+
+Slowest task
+------------
+taskno=1, weight=162, duration=0 s, sources="2"
+
+======== ======= ======= === === =
+variable mean    stddev  min max n
+======== ======= ======= === === =
+nsites   1.25000 0.50000 1   2   4
+weight   40      7.62153 36  52  4
+======== ======= ======= === === =
+
+Informational data
+------------------
+============== ========================================================================= ========
+task           sent                                                                      received
+prefilter      srcs=21.95 KB monitor=4.46 KB srcfilter=3.13 KB                           7.04 KB 
+count_ruptures sources=4.04 KB srcfilter=1.76 KB param=1.62 KB gsims=418 B monitor=333 B 359 B   
+============== ========================================================================= ========
 
 Slowest operations
 ------------------
 ============================== ========= ========= ======
 operation                      time_sec  memory_mb counts
 ============================== ========= ========= ======
-managing sources               0.004     0.0       1     
-reading composite source model 0.004     0.0       1     
-store source_info              0.003     0.0       1     
-total count_ruptures           0.002     0.0       1     
-reading site collection        2.344E-04 0.0       1     
-saving probability maps        2.503E-05 0.0       1     
-aggregate curves               1.740E-05 0.0       1     
+total prefilter                0.06478   3.83594   14    
+managing sources               0.04500   0.0       1     
+reading composite source model 0.00532   0.0       1     
+total count_ruptures           0.00455   2.12109   1     
+store source_info              0.00368   0.0       1     
+splitting sources              9.542E-04 0.0       1     
+reading site collection        8.094E-04 0.0       1     
+unpickling prefilter           3.989E-04 0.0       14    
+unpickling count_ruptures      4.101E-05 0.0       1     
+saving probability maps        2.885E-05 0.0       1     
+aggregate curves               2.003E-05 0.0       1     
 ============================== ========= ========= ======

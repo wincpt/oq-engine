@@ -3,8 +3,8 @@ Classical PSHA QA test
 
 ============== ===================
 checksum32     2,024,827,974      
-date           2018-02-25T06:42:46
-engine_version 2.10.0-git1f7c0c0  
+date           2018-05-15T04:13:07
+engine_version 3.1.0-git0acbc11   
 ============== ===================
 
 num_sites = 21, num_levels = 26
@@ -44,12 +44,12 @@ source_model_logic_tree `source_model_logic_tree.xml <source_model_logic_tree.xm
 
 Composite source model
 ----------------------
-========================= ====== =============== ================
-smlt_path                 weight gsim_logic_tree num_realizations
-========================= ====== =============== ================
-aFault_aPriori_D2.1       0.500  simple(2)       2/2             
-bFault_stitched_D2.1_Char 0.500  simple(2)       2/2             
-========================= ====== =============== ================
+========================= ======= =============== ================
+smlt_path                 weight  gsim_logic_tree num_realizations
+========================= ======= =============== ================
+aFault_aPriori_D2.1       0.50000 simple(2)       2/2             
+bFault_stitched_D2.1_Char 0.50000 simple(2)       2/2             
+========================= ======= =============== ================
 
 Required parameters per tectonic region type
 --------------------------------------------
@@ -76,66 +76,50 @@ Number of ruptures per tectonic region type
 ============================= ====== ==================== ============ ============
 source_model                  grp_id trt                  eff_ruptures tot_ruptures
 ============================= ====== ==================== ============ ============
-aFault_aPriori_D2.1.xml       0      Active Shallow Crust 3,531        1,980       
-bFault_stitched_D2.1_Char.xml 1      Active Shallow Crust 3,806        2,706       
+aFault_aPriori_D2.1.xml       0      Active Shallow Crust 2,013        1,980       
+bFault_stitched_D2.1_Char.xml 1      Active Shallow Crust 2,321        2,706       
 ============================= ====== ==================== ============ ============
 
 ============= ======
 #TRT models   2     
-#eff_ruptures 7,337 
+#eff_ruptures 4,334 
 #tot_ruptures 4,686 
-#tot_weight   24,251
+#tot_weight   27,837
 ============= ======
-
-Informational data
-------------------
-======================= ===================================================================================
-count_ruptures.received tot 39.22 KB, max_per_task 3.09 KB                                                 
-count_ruptures.sent     sources 1.34 MB, srcfilter 37.02 KB, param 13.86 KB, monitor 6.77 KB, gsims 4.51 KB
-hazard.input_weight     4686.0                                                                             
-hazard.n_imts           2                                                                                  
-hazard.n_levels         26                                                                                 
-hazard.n_realizations   4                                                                                  
-hazard.n_sites          21                                                                                 
-hazard.n_sources        426                                                                                
-hazard.output_weight    546.0                                                                              
-hostname                tstation.gem.lan                                                                   
-require_epsilons        False                                                                              
-======================= ===================================================================================
 
 Slowest sources
 ---------------
-========= ========================= ============ ========= ========= =========
-source_id source_class              num_ruptures calc_time num_sites num_split
-========= ========================= ============ ========= ========= =========
-85_1      CharacteristicFaultSource 11           0.042     51        4        
-2_1       CharacteristicFaultSource 11           0.036     37        4        
-31_1      CharacteristicFaultSource 11           0.032     37        3        
-29_1      CharacteristicFaultSource 11           0.032     25        2        
-12_0      CharacteristicFaultSource 11           0.028     37        4        
-46_1      CharacteristicFaultSource 11           0.019     37        4        
-53_0      CharacteristicFaultSource 11           0.019     33        4        
-53_1      CharacteristicFaultSource 11           0.019     33        4        
-51_1      CharacteristicFaultSource 11           0.019     45        4        
-73_0      CharacteristicFaultSource 11           0.018     57        4        
-57_1      CharacteristicFaultSource 11           0.018     45        4        
-73_1      CharacteristicFaultSource 11           0.018     57        4        
-33_0      CharacteristicFaultSource 11           0.018     61        4        
-57_0      CharacteristicFaultSource 11           0.017     45        4        
-33_1      CharacteristicFaultSource 11           0.017     61        4        
-43_0      CharacteristicFaultSource 11           0.017     69        4        
-43_1      CharacteristicFaultSource 11           0.017     69        4        
-45_1      CharacteristicFaultSource 11           0.016     53        4        
-75_1      CharacteristicFaultSource 11           0.016     51        4        
-65_0      CharacteristicFaultSource 11           0.016     43        4        
-========= ========================= ============ ========= ========= =========
+========= ========================= ============ ========= ========== ========= ========= ======
+source_id source_class              num_ruptures calc_time split_time num_sites num_split events
+========= ========================= ============ ========= ========== ========= ========= ======
+35_1      CharacteristicFaultSource 11           1.969E-04 1.192E-06  27        2         0     
+47_0      CharacteristicFaultSource 11           1.943E-04 9.537E-07  16        2         0     
+57_0      CharacteristicFaultSource 11           1.726E-04 1.192E-06  23        2         0     
+36_0      CharacteristicFaultSource 11           1.712E-04 9.537E-07  26        2         0     
+44_1      CharacteristicFaultSource 11           1.590E-04 9.537E-07  33        2         0     
+4_1       CharacteristicFaultSource 11           1.583E-04 9.537E-07  24        2         0     
+42_0      CharacteristicFaultSource 11           1.433E-04 9.537E-07  19        2         0     
+47_1      CharacteristicFaultSource 11           1.380E-04 1.192E-06  16        2         0     
+2_1       CharacteristicFaultSource 11           1.378E-04 9.537E-07  23        2         0     
+1_0       CharacteristicFaultSource 11           1.304E-04 1.192E-06  22        2         0     
+72_0      CharacteristicFaultSource 11           1.264E-04 9.537E-07  31        2         0     
+48_0      CharacteristicFaultSource 11           1.249E-04 9.537E-07  12        2         0     
+81_1      CharacteristicFaultSource 11           1.249E-04 9.537E-07  14        2         0     
+0_0       CharacteristicFaultSource 11           1.237E-04 1.669E-06  29        3         0     
+57_1      CharacteristicFaultSource 11           1.223E-04 9.537E-07  23        2         0     
+66_0      CharacteristicFaultSource 11           1.206E-04 9.537E-07  26        2         0     
+34_0      CharacteristicFaultSource 11           1.197E-04 9.537E-07  32        2         0     
+48_1      CharacteristicFaultSource 11           1.187E-04 1.192E-06  12        2         0     
+41_1      CharacteristicFaultSource 11           1.159E-04 1.192E-06  21        2         0     
+30_1      CharacteristicFaultSource 11           1.144E-04 9.537E-07  21        2         0     
+========= ========================= ============ ========= ========== ========= ========= ======
 
 Computation times by source typology
 ------------------------------------
 ========================= ========= ======
 source_class              calc_time counts
 ========================= ========= ======
-CharacteristicFaultSource 2.411     246   
+CharacteristicFaultSource 0.01551   246   
 ========================= ========= ======
 
 Duplicated sources
@@ -144,21 +128,56 @@ There are no duplicated sources
 
 Information about the tasks
 ---------------------------
-================== ===== ====== ===== ===== =========
-operation-duration mean  stddev min   max   num_tasks
-count_ruptures     0.122 0.037  0.034 0.201 21       
-================== ===== ====== ===== ===== =========
+================== ======= ========= ========= ======= =========
+operation-duration mean    stddev    min       max     num_tasks
+prefilter          0.00674 0.00366   0.00162   0.01553 54       
+count_ruptures     0.00204 6.287E-04 9.575E-04 0.00372 66       
+================== ======= ========= ========= ======= =========
+
+Fastest task
+------------
+taskno=23, weight=401, duration=0 s, sources="68_1 69_0 69_1 6_0 6_1"
+
+======== ==== ======= === === =
+variable mean stddev  min max n
+======== ==== ======= === === =
+nsites   13   4.27785 9   18  5
+weight   80   13      66  93  5
+======== ==== ======= === === =
+
+Slowest task
+------------
+taskno=53, weight=450, duration=0 s, sources="52_1 53_0 53_1 54_0 54_1 55_0 55_1 56_0 56_1 57_0"
+
+======== ======= ======= === === ==
+variable mean    stddev  min max n 
+======== ======= ======= === === ==
+nsites   4.30000 1.56702 3   8   10
+weight   45      7.75760 38  62  10
+======== ======= ======= === === ==
+
+Informational data
+------------------
+============== ================================================================================== ========
+task           sent                                                                               received
+prefilter      srcs=1.53 MB monitor=17.19 KB srcfilter=12.08 KB                                   1.46 MB 
+count_ruptures sources=1.48 MB srcfilter=116.02 KB param=43.18 KB monitor=21.46 KB gsims=14.18 KB 45.05 KB
+============== ================================================================================== ========
 
 Slowest operations
 ------------------
 ============================== ========= ========= ======
 operation                      time_sec  memory_mb counts
 ============================== ========= ========= ======
-total count_ruptures           2.561     0.145     21    
-reading composite source model 2.102     0.0       1     
-managing sources               0.627     0.0       1     
-store source_info              0.005     0.0       1     
-aggregate curves               0.001     0.0       21    
-reading site collection        2.086E-04 0.0       1     
-saving probability maps        2.527E-05 0.0       1     
+reading composite source model 2.93934   0.0       1     
+total prefilter                0.36386   3.58594   54    
+managing sources               0.30467   0.0       1     
+total count_ruptures           0.13462   0.12500   66    
+unpickling prefilter           0.02750   0.0       54    
+store source_info              0.00689   0.0       1     
+unpickling count_ruptures      0.00362   0.0       66    
+aggregate curves               0.00225   0.0       66    
+splitting sources              0.00201   0.0       1     
+reading site collection        5.965E-04 0.0       1     
+saving probability maps        3.386E-05 0.0       1     
 ============================== ========= ========= ======

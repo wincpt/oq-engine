@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 # vim: tabstop=4 shiftwidth=4 softtabstop=4
 #
-# Copyright (C) 2015-2017 GEM Foundation
+# Copyright (C) 2015-2018 GEM Foundation
 #
 # OpenQuake is free software: you can redistribute it and/or modify it
 # under the terms of the GNU Affero General Public License as published
@@ -15,7 +15,6 @@
 #
 # You should have received a copy of the GNU Affero General Public License
 # along with OpenQuake. If not, see <http://www.gnu.org/licenses/>.
-from __future__ import division
 import operator
 import collections
 import logging
@@ -203,7 +202,8 @@ def get_set_num_ruptures(src):
                 logging.warn('%s.count_ruptures took %d seconds, perhaps the '
                              'rupture_mesh_spacing is too small', src, dt)
             else:
-                logging.warn('count_ruptures %s took %d seconds??', src, dt)
+                # multiPointSource
+                logging.warn('count_ruptures %s took %d seconds', src, dt)
     return src.num_ruptures
 
 
@@ -315,7 +315,6 @@ class RuptureConverter(object):
             br = surface.bottomRight
             bottom_right = geo.Point(br['lon'], br['lat'], br['depth'])
         return geo.PlanarSurface.from_corner_points(
-            self.rupture_mesh_spacing,
             top_left, top_right, bottom_right, bottom_left)
 
     def convert_surfaces(self, surface_nodes):
@@ -366,8 +365,7 @@ class RuptureConverter(object):
         rupt = source.rupture.BaseRupture(
             mag=mag, rake=rake, tectonic_region_type=None,
             hypocenter=hypocenter,
-            surface=self.convert_surfaces(surfaces),
-            source_typology=source.SimpleFaultSource)
+            surface=self.convert_surfaces(surfaces))
         return rupt
 
     def convert_complexFaultRupture(self, node):
@@ -382,8 +380,7 @@ class RuptureConverter(object):
         rupt = source.rupture.BaseRupture(
             mag=mag, rake=rake, tectonic_region_type=None,
             hypocenter=hypocenter,
-            surface=self.convert_surfaces(surfaces),
-            source_typology=source.ComplexFaultSource)
+            surface=self.convert_surfaces(surfaces))
         return rupt
 
     def convert_singlePlaneRupture(self, node):
@@ -399,8 +396,7 @@ class RuptureConverter(object):
             mag=mag, rake=rake,
             tectonic_region_type=None,
             hypocenter=hypocenter,
-            surface=self.convert_surfaces(surfaces),
-            source_typology=source.NonParametricSeismicSource)
+            surface=self.convert_surfaces(surfaces))
         return rupt
 
     def convert_multiPlanesRupture(self, node):
@@ -416,8 +412,7 @@ class RuptureConverter(object):
             mag=mag, rake=rake,
             tectonic_region_type=None,
             hypocenter=hypocenter,
-            surface=self.convert_surfaces(surfaces),
-            source_typology=source.NonParametricSeismicSource)
+            surface=self.convert_surfaces(surfaces))
         return rupt
 
     def convert_griddedRupture(self, node):
@@ -433,8 +428,7 @@ class RuptureConverter(object):
             mag=mag, rake=rake,
             tectonic_region_type=None,
             hypocenter=hypocenter,
-            surface=self.convert_surfaces(surfaces),
-            source_typology=source.NonParametricSeismicSource)
+            surface=self.convert_surfaces(surfaces))
         return rupt
 
     def convert_ruptureCollection(self, node):
@@ -448,16 +442,16 @@ class RuptureConverter(object):
             coll[grp_id] = ebrs = []
             for node in grpnode:
                 rup = self.convert_node(node)
-                rupid = int(node['id'])
+                rup.serial = int(node['id'])
                 sesnodes = node.stochasticEventSets
                 events = []
                 for sesnode in sesnodes:
                     with context(self.fname, sesnode):
                         ses = sesnode['id']
-                        for eid in (~sesnode).split():
+                        for eid in sesnode.text.split():
                             events.append((eid, ses, 0))
                 ebr = source.rupture.EBRupture(
-                    rup, (), numpy.array(events, event_dt), rupid)
+                    rup, (), numpy.array(events, event_dt))
                 ebrs.append(ebr)
         return coll
 
