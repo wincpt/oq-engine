@@ -25,7 +25,7 @@ import collections
 import h5py
 import numpy
 
-from openquake.baselib.general import AccumDict
+from openquake.baselib.general import AccumDict, split_in_slices
 from openquake.baselib.python3compat import zip
 from openquake.baselib import parallel
 from openquake.hazardlib import nrml
@@ -598,15 +598,18 @@ class UCERFSource(object):
         """
         Yield ruptures for the current set of indices (.rupset_idx)
         """
-        try:  # the source has set a subset of indices
-            rupset_idx = self.rupset_idx
-        except AttributeError:  # use all indices
-            rupset_idx = numpy.arange(self.num_ruptures)
-        for ridx in rupset_idx:
+        for ridx in self.rupset_idx:
             if self.rate[ridx]:  # ruptures may have have zero rate
                 rup = self.get_ucerf_rupture(ridx, self.src_filter)
                 if rup:
                     yield rup
+
+    def __iter__(self):
+        assert self.source_id, 'You must call .new()!'
+        for slc in split_in_slices(self.num_ruptures, 1000):
+            new = copy.copy(self)
+            new.rupset_idx = numpy.arange(slc.start, slc.stop, dtype=U32)
+            yield new
 
     def get_background_sources(self, src_filter):
         """

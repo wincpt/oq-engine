@@ -75,10 +75,8 @@ SourceConverter.convert_UCERFSource = convert_UCERFSource
 
 
 @util.reader
-def ucerf_classical(rupset_idx, ucerf_source, src_filter, gsims, monitor):
+def ucerf_classical(ucerf_source, src_filter, gsims, monitor):
     """
-    :param rupset_idx:
-        indices of the rupture sets
     :param ucerf_source:
         an object taking the place of a source for UCERF
     :param src_filter:
@@ -95,12 +93,11 @@ def ucerf_classical(rupset_idx, ucerf_source, src_filter, gsims, monitor):
     imtls = monitor.oqparam.imtls
     ucerf_source.src_filter = src_filter  # so that .iter_ruptures() work
     grp_id = ucerf_source.src_group_id
-    mag = ucerf_source.mags[rupset_idx].max()
+    mag = ucerf_source.mags[ucerf_source.rupset_idx].max()
     ridx = set()
-    for idx in rupset_idx:
+    for idx in ucerf_source.rupset_idx:
         ridx.update(ucerf_source.get_ridx(idx))
-    ucerf_source.rupset_idx = rupset_idx
-    ucerf_source.num_ruptures = nruptures = len(rupset_idx)
+    ucerf_source.num_ruptures = nruptures = len(ucerf_source.rupset_idx)
 
     # prefilter the sites close to the rupture set
     s_sites = ucerf_source.get_rupture_sites(ridx, src_filter, mag)
@@ -190,12 +187,11 @@ class UcerfPSHACalculator(PSHACalculator):
                 concurrent_tasks=ct2)
 
             # parallelize by rupture subsets
-            rup_sets = numpy.arange(ucerf_source.num_ruptures)
             taskname = 'ucerf_classical_%d' % grp_id
-            acc = parallel.Starmap.apply(
+            acc = parallel.Starmap(
                 ucerf_classical,
-                (rup_sets, ucerf_source, self.src_filter, gsims, monitor),
-                concurrent_tasks=ct2, name=taskname
+                [(src, self.src_filter, gsims, monitor)
+                 for src in ucerf_source], name=taskname
             ).reduce(self.agg_dicts, acc)
 
             # compose probabilities from background sources
