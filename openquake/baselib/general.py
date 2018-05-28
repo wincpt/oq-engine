@@ -20,7 +20,6 @@
 """
 Utility functions of general interest.
 """
-from __future__ import division, print_function
 import os
 import sys
 import imp
@@ -44,6 +43,24 @@ from openquake.baselib.python3compat import decode
 
 F32 = numpy.float32
 F64 = numpy.float64
+
+
+def cached_property(method):
+    """
+    :param method: a method without arguments except self
+    :returns: a cached property
+    """
+    name = method.__name__
+
+    def newmethod(self):
+        try:
+            val = self.__dict__[name]
+        except KeyError:
+            val = method(self)
+            self.__dict__[name] = val
+        return val
+    newmethod.__name__ = method.__name__
+    return property(newmethod)
 
 
 class WeightedSequence(collections.MutableSequence):
@@ -316,10 +333,11 @@ def assert_close(a, b, rtol=1e-07, atol=0, context=None):
     ctx = '' if context is None else 'in context ' + repr(context)
     raise AssertionError('%r != %r %s' % (a, b, ctx))
 
+
 _tmp_paths = []
 
 
-def writetmp(content=None, dir=None, prefix="tmp", suffix="tmp"):
+def gettemp(content=None, dir=None, prefix="tmp", suffix="tmp"):
     """Create temporary file with the given content.
 
     Please note: the temporary file must be deleted by the caller.
@@ -347,7 +365,7 @@ def writetmp(content=None, dir=None, prefix="tmp", suffix="tmp"):
 @atexit.register
 def removetmp():
     """
-    Remove the temporary files created by writetmp
+    Remove the temporary files created by gettemp
     """
     for path in _tmp_paths:
         if os.path.exists(path):  # not removed yet
@@ -374,7 +392,7 @@ def git_suffix(fname):
                 cwd=os.path.dirname(git_path)).strip()
             gh = "-git" + decode(gh) if gh else ''
             return gh
-        except:
+        except Exception:
             # trapping everything on purpose; git may not be installed or it
             # may not work properly
             pass
@@ -936,6 +954,7 @@ def socket_ready(hostport):
     finally:
         sock.close()
     return False if exc else True
+
 
 port_candidates = list(range(1920, 2000))
 

@@ -15,7 +15,6 @@
 #
 # You should have received a copy of the GNU Affero General Public License
 # along with OpenQuake. If not, see <http://www.gnu.org/licenses/>.
-from __future__ import division
 import logging
 import operator
 import itertools
@@ -114,7 +113,6 @@ def event_based_risk(riskinput, riskmodel, param, monitor):
                 ratios = loss_ratios[a]  # shape (E, I)
                 aid = asset.ordinal
                 losses = ratios * asset.value(loss_type)
-
                 # average losses
                 if param['avg_losses']:
                     rat = ratios.sum(axis=0) * param['ses_ratio']
@@ -292,7 +290,7 @@ class EbrCalculator(base.RiskCalculator):
                 getter = getters.GmfGetter(
                     rlzs_by_gsim, rupts, sitecol, imtls, min_iml,
                     self.oqparam.maximum_distance, trunc_level, correl_model,
-                    samples)
+                    self.oqparam.filter_distance, samples)
                 ri = riskinput.RiskInput(getter, self.assets_by_site, eps)
                 allargs.append((ri, riskmodel, assetcol, monitor))
 
@@ -411,7 +409,7 @@ class EbrCalculator(base.RiskCalculator):
                 'avg_losses-rlzs', F32, (self.A, num_rlzs, self.L * self.I))
 
         num_events = collections.Counter()
-        self.gmdata = AccumDict(accum=numpy.zeros(len(oq.imtls) + 2, F32))
+        self.gmdata = AccumDict(accum=numpy.zeros(len(oq.imtls) + 1, F32))
         self.taskno = 0
         self.start = 0
         self.num_losses = numpy.zeros((self.A, num_rlzs), U32)
@@ -512,8 +510,8 @@ class EbrCalculator(base.RiskCalculator):
                 self.datastore['losses_by_event'] = agglosses
         else:
             num_events = result
-            # gmv[:-2] are the total gmv per each IMT
-            gmv = sum(gm[:-2].sum() for gm in self.gmdata.values())
+            # gmv[:-1] are the events per each IMT
+            gmv = sum(gm[:-1].sum() for gm in self.gmdata.values())
             if not gmv:
                 raise RuntimeError('No GMFs were generated, perhaps they were '
                                    'all below the minimum_intensity threshold')

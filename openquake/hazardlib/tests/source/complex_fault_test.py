@@ -36,14 +36,13 @@ class ComplexFaultSourceSimpleGeometryIterRupturesTestCase(
     # test that complex fault sources of simple geometry behave
     # exactly the same as simple fault sources of the same geometry
     def _make_source(self, *args, **kwargs):
-        source = super(ComplexFaultSourceSimpleGeometryIterRupturesTestCase,
-                       self)._make_source(*args, **kwargs)
+        source = super()._make_source(*args, **kwargs)
         surface = SimpleFaultSurface.from_fault_data(
             source.fault_trace, source.upper_seismogenic_depth,
             source.lower_seismogenic_depth, source.dip,
             source.rupture_mesh_spacing
         )
-        mesh = surface.get_mesh()
+        mesh = surface.mesh
         top_edge = Line(list(mesh[0:1]))
         bottom_edge = Line(list(mesh[-1:]))
 

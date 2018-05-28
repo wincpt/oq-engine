@@ -21,9 +21,11 @@ Module :mod:`openquake.hazardlib.geo.mesh` defines classes :class:`Mesh` and
 its subclass :class:`RectangularMesh`.
 """
 import numpy
+from scipy.spatial.distance import cdist
 import shapely.geometry
 import shapely.ops
 
+from openquake.baselib.general import cached_property
 from openquake.hazardlib.geo.point import Point
 from openquake.hazardlib.geo import geodetic
 from openquake.hazardlib.geo import utils as geo_utils
@@ -161,6 +163,18 @@ class Mesh(object):
         """
         return self.lons.shape
 
+    @cached_property
+    def xyz(self):
+        """
+        :returns: an array of shape (N, 3) with the cartesian coordinates
+        """
+        if self.depths is None:
+            depths = numpy.zeros(self.lons.size)
+        else:
+            depths = self.depths.flatten()
+        return geo_utils.spherical_to_cartesian(
+            self.lons.flatten(), self.lats.flatten(), depths)
+
     def __iter__(self):
         """
         Generate :class:`~openquake.hazardlib.geo.point.Point` objects the mesh
@@ -240,43 +254,31 @@ class Mesh(object):
         in another mesh.
 
         :returns:
-            numpy array of distances in km of the same shape as ``mesh``.
+            numpy array of distances in km of shape (self.size, mesh.size)
 
         Method doesn't make any assumptions on arrangement of the points
         in either mesh and instead calculates the distance from each point of
         this mesh to each point of the target mesh and returns the lowest found
         for each.
         """
-        return self._min_idx_dst(mesh)[1]
+        return cdist(self.xyz, mesh.xyz).min(axis=0)
 
     def get_closest_points(self, mesh):
         """
-        Find closest point of this mesh for each one in ``mesh``.
+        Find closest point of this mesh for each point in the other mesh
 
         :returns:
-            :class:`Mesh` object of the same shape as ``mesh`` with closest
+            :class:`Mesh` object of the same shape as `mesh` with closest
             points from this one at respective indices.
         """
-        min_idx, min_dst = self._min_idx_dst(mesh)
+        min_idx = cdist(self.xyz, mesh.xyz).argmin(axis=0)  # lose shape
+        if hasattr(mesh, 'shape'):
+            min_idx = min_idx.reshape(mesh.shape)
         lons = self.lons.take(min_idx)
         lats = self.lats.take(min_idx)
         if self.depths is None:
-            depths = None
-        else:
-            depths = self.depths.take(min_idx)
-        return Mesh(lons, lats, depths)
-
-    def _min_idx_dst(self, mesh):
-        if self.depths is None:
-            depths1 = numpy.zeros_like(self.lons)
-        else:
-            depths1 = self.depths
-        if mesh.depths is None:
-            depths2 = numpy.zeros_like(mesh.lons)
-        else:
-            depths2 = mesh.depths
-        return geodetic.min_idx_dst(
-            self.lons, self.lats, depths1, mesh.lons, mesh.lats, depths2)
+            return Mesh(lons, lats)
+        return Mesh(lons, lats, self.depths.take(min_idx))
 
     def get_distance_matrix(self):
         """
@@ -321,7 +323,7 @@ class Mesh(object):
             on number of points in the mesh and their arrangement.
         """
         # create a projection centered in the center of points collection
-        proj = geo_utils.get_orthographic_projection(
+        proj = geo_utils.OrthographicProjection(
             *geo_utils.get_spherical_bounding_box(self.lons, self.lats))
 
         # project all the points and create a shapely multipoint object.
@@ -338,7 +340,7 @@ class Mesh(object):
         Point's depth is ignored.
 
         See
-        :meth:`openquake.hazardlib.geo.surface.base.BaseQuadrilateralSurface.get_joyner_boore_distance`
+        :meth:`openquake.hazardlib.geo.surface.base.BaseSurface.get_joyner_boore_distance`
         for definition of this distance.
 
         :returns:
@@ -356,7 +358,8 @@ class Mesh(object):
         # if calculated geodetic distance is over some threshold.
         # get the highest slice from the 3D mesh
         distances = geodetic.min_geodetic_distance(
-            self.lons, self.lats, mesh.lons, mesh.lats)
+            self.xyz if self.depths is None else (self.lons, self.lats),
+            mesh.xyz if mesh.depths is None else (mesh.lons, mesh.lats))
         # here we find the points for which calculated mesh-to-mesh
         # distance is below a threshold. this threshold is arbitrary:
         # lower values increase the maximum possible error, higher
@@ -424,7 +427,7 @@ class Mesh(object):
             # the mesh doesn't contain even a single cell
             return self._get_proj_convex_hull()
 
-        proj = geo_utils.get_orthographic_projection(
+        proj = geo_utils.OrthographicProjection(
             *geo_utils.get_spherical_bounding_box(self.lons, self.lats))
         if len(self.lons.shape) == 1:  # 1D mesh
             lons = self.lons.reshape(len(self.lons), 1)
@@ -506,7 +509,7 @@ class RectangularMesh(Mesh):
     in a mesh is related to it's position with respect to neighbouring points.
     """
     def __init__(self, lons, lats, depths=None):
-        super(RectangularMesh, self).__init__(lons, lats, depths)
+        super().__init__(lons, lats, depths)
         assert lons.ndim == 2
 
     @classmethod
@@ -529,9 +532,9 @@ class RectangularMesh(Mesh):
             assert len(row) == num_cols, \
                    'lists of points are not of uniform length'
             for j, point in enumerate(row):
-                lons[i][j] = point.longitude
-                lats[i][j] = point.latitude
-                depths[i][j] = point.depth
+                lons[i, j] = point.longitude
+                lats[i, j] = point.latitude
+                depths[i, j] = point.depth
         if not depths.any():
             depths = None
         return cls(lons, lats, depths)
@@ -599,14 +602,12 @@ class RectangularMesh(Mesh):
         """
         assert 1 not in self.lons.shape, (
             "inclination and azimuth are only defined for mesh of more than "
-            "one row and more than one column of points"
-        )
+            "one row and more than one column of points")
 
         if self.depths is not None:
             assert ((self.depths[1:] - self.depths[:-1]) >= 0).all(), (
                 "get_mean_inclination_and_azimuth() requires next mesh row "
-                "to be not shallower than the previous one"
-            )
+                "to be not shallower than the previous one")
 
         points, along_azimuth, updip, diag = self.triangulate()
 
@@ -691,8 +692,8 @@ class RectangularMesh(Mesh):
             # be only either -1 or 1 with zero values (when edge is pointing
             # strictly north or south) expressed as 1 (which means "don't
             # change the sign")
-            + 0.1
-        )
+            + 0.1)
+
         # the length of projection of azimuthal edge on norms_north is cosine
         # of edge's azimuth
         az_cos = numpy.sum(along_azimuth[:-1] * norms_north[:-1, :-1], axis=-1)
@@ -706,8 +707,7 @@ class RectangularMesh(Mesh):
         # bottom-right triangles
         sign = numpy.sign(numpy.sign(
             numpy.sum(along_azimuth[1:] * norms_west[1:, 1:], axis=-1))
-            + 0.1
-        )
+            + 0.1)
         az_cos = numpy.sum(along_azimuth[1:] * norms_north[1:, 1:], axis=-1)
         xx += numpy.sum(br_area * az_cos)
         yy += numpy.sum(br_area * sqrt(1 - az_cos * az_cos) * sign)
