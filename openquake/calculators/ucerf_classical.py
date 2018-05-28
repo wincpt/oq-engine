@@ -58,7 +58,6 @@ def convert_UCERFSource(self, node):
         start_date = None
     return UCERFSource(
         source_file,
-        node["id"],
         self.tom.time_span,
         start_date,
         float(node["minMag"]),

@@ -387,13 +387,13 @@ class UCERFSource(object):
     tectonic_region_type = DEFAULT_TRT
 
     def __init__(
-            self, source_file, id, investigation_time, start_date, min_mag,
+            self, source_file, investigation_time, start_date, min_mag,
             npd=NPD, hdd=HDD, aspect=1.5, upper_seismogenic_depth=0.0,
             lower_seismogenic_depth=15.0, msr=WC1994(), mesh_spacing=1.0,
             trt="Active Shallow Crust", integration_distance=1000):
         assert os.path.exists(source_file), source_file
         self.source_file = source_file
-        self.source_id = id
+        self.source_id = None  # set later
         self.inv_time = investigation_time
         self.start_date = start_date
         self.tom = self._get_tom()
